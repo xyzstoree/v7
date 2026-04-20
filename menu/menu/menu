@@ -1,0 +1,246 @@
+#!/bin/bash
+# --- [ WARNA & DEKORASI ] ---
+GREEN='\e[32m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+CYAN='\033[1;36m'
+YELLOW='\033[1;33m'
+WHITE='\033[1;37m'
+NC='\033[0m'
+r="\033[1;31m" 
+
+# --- [ PENGAMBILAN DATA SISTEM ] ---
+[span_0](start_span)responden=$(curl -s "http://ip-api.com/json/?fields=country,region,city,timezone,isp")[span_0](end_span)
+[span_1](start_span)ISP=$(echo "$responden" | jq -r '.isp')[span_1](end_span)
+[span_2](start_span)CITY=$(echo "$responden" | jq -r '.city')[span_2](end_span)
+[span_3](start_span)IPVPS=$(curl -s ipv4.icanhazip.com)[span_3](end_span)
+[span_4](start_span)domain=$(cat /etc/xray/domain)[span_4](end_span)
+[span_5](start_span)RAM=$(free -m | awk 'NR==2 {print $2}')[span_5](end_span)
+[span_6](start_span)USAGERAM=$(free -m | awk 'NR==2 {print $3}')[span_6](end_span)
+[span_7](start_span)MEMOFREE=$(printf '%-1s' "$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')")[span_7](end_span)
+[span_8](start_span)LOADCPU=$(printf '%-0.00001s' "$(top -bn1 | awk '/Cpu/ { cpu = "" 100 - $8 "%" }; END { print cpu }')")[span_8](end_span)
+[span_9](start_span)MODEL=$(cat /etc/os-release | grep -w PRETTY_NAME | head -n1 | sed 's/=//g' | sed 's/"//g' | sed 's/PRETTY_NAME//g')[span_9](end_span)
+[span_10](start_span)CORE=$(printf '%-1s' "$(grep -c cpu[0-9] /proc/stat)")[span_10](end_span)
+[span_11](start_span)DATEVPS=$(date +'%d/%m/%Y')[span_11](end_span)
+[span_12](start_span)TIMEZONE=$(printf '%(%H:%M:%S)T')[span_12](end_span)
+[span_13](start_span)SERONLINE=$(uptime -p | cut -d " " -f 2-10000)[span_13](end_span)
+clear
+
+[span_14](start_span)MYIP=$(curl -sS ipv4.icanhazip.com)[span_14](end_span)
+echo ""
+[span_15](start_span)rm -f /usr/bin/user[span_15](end_span)
+[span_16](start_span)username=$(curl -sS https://raw.githubusercontent.com/xyzstoree/izin/main/ip | grep $MYIP | awk '{print $2}')[span_16](end_span)
+[span_17](start_span)echo "$username" >/usr/bin/user[span_17](end_span)
+[span_18](start_span)rm -f /usr/bin/e[span_18](end_span)
+[span_19](start_span)today=`date -d "0 days" +"%Y-%m-%d"`[span_19](end_span)
+[span_20](start_span)valid=$(curl -sS https://raw.githubusercontent.com/xyzstoree/izin/main/ip | grep $MYIP | awk '{print $3}')[span_20](end_span)
+[span_21](start_span)echo "$valid" >/usr/bin/e[span_21](end_span)
+[span_22](start_span)username=$(cat /usr/bin/user)[span_22](end_span)
+[span_23](start_span)exp=$(cat /usr/bin/e)[span_23](end_span)
+
+clear
+[span_24](start_span)d1=$(date -d "$valid" +%s)[span_24](end_span)
+[span_25](start_span)d2=$(date -d "$today" +%s)[span_25](end_span)
+[span_26](start_span)certifacate=$(((d1 - d2) / 86400))[span_26](end_span)
+[span_27](start_span)DATE=$(date +'%Y-%m-%d')[span_27](end_span)
+
+# --- [ CEK MASA AKTIF ] ---
+[span_28](start_span)Info="${GREEN}Active${NC}"[span_28](end_span)
+[span_29](start_span)Error="${RED}Expired${NC}"[span_29](end_span)
+
+[span_30](start_span)if [[ "$certifacate" -le "0" ]]; then[span_30](end_span)
+    [span_31](start_span)sts="${Error}"[span_31](end_span)
+    echo -e " ╭───────────────────────────────────────────────╮"
+    [span_32](start_span)echo -e " │ ${RED}Masa Aktif Script Kamu Sudah Habis!${NC}           │"[span_32](end_span)
+    [span_33](start_span)echo -e " │ ${WHITE}Silahkan Contact Admin Untuk Perpanjang${NC}       │"[span_33](end_span)
+    [span_34](start_span)echo -e " │ ${GREEN}Whatsapp : wa.me/6285960592386${NC}                │"[span_34](end_span)
+    [span_35](start_span)echo -e " │ ${CYAN}Telegram : @BangToyibbz${NC}                       │"[span_35](end_span)
+    echo -e " ╰───────────────────────────────────────────────╯"
+    [span_36](start_span)sleep 3[span_36](end_span)
+    [span_37](start_span)exit 1[span_37](end_span)
+[span_38](start_span)else[span_38](end_span)
+    [span_39](start_span)sts="${Info}"[span_39](end_span)
+[span_40](start_span)fi[span_40](end_span)
+
+[span_41](start_span)echo -e "${CYAN}Tunggu sebentar, sedang memuat data...${NC}"[span_41](end_span)
+clear
+
+# --- [ STATUS SERVICE & AKUN ] ---
+[span_42](start_span)uptime="$(uptime -p | cut -d " " -f 2-10)"[span_42](end_span)
+[span_43](start_span)cpu_usage1="$(ps aux | awk 'BEGIN {sum=0} {sum+=$3}; END {print sum}')"[span_43](end_span)
+[span_44](start_span)cpu_usage="$((${cpu_usage1/\.*} / ${coREDiilik:-1}))"[span_44](end_span)
+[span_45](start_span)cpu_usage+=" %"[span_45](end_span)
+[span_46](start_span)WKT=$(curl -s ipinfo.io/timezone )[span_46](end_span)
+[span_47](start_span)DAY=$(date +%A)[span_47](end_span)
+[span_48](start_span)DATE=$(date +%m/%d/%Y)[span_48](end_span)
+[span_49](start_span)DATE2=$(date -R | cut -d " " -f -5)[span_49](end_span)
+[span_50](start_span)IPVPS=$(curl -s ipinfo.io/ip )[span_50](end_span)
+[span_51](start_span)cname=$( awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo )[span_51](end_span)
+[span_52](start_span)cores=$( awk -F: '/model name/ {core++} END {print core}' /proc/cpuinfo )[span_52](end_span)
+[span_53](start_span)freq=$( awk -F: ' /cpu MHz/ {freq=$2} END {print freq}' /proc/cpuinfo )[span_53](end_span)
+[span_54](start_span)tram=$( free -m | awk 'NR==2 {print $2}' )[span_54](end_span)
+[span_55](start_span)uram=$( free -m | awk 'NR==2 {print $3}' )[span_55](end_span)
+[span_56](start_span)fram=$( free -m | awk 'NR==2 {print $4}' )[span_56](end_span)
+clear
+
+[span_57](start_span)ssh_service=$(/etc/init.d/ssh status | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)[span_57](end_span)
+[span_58](start_span)dropbear_service=$(/etc/init.d/dropbear status | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)[span_58](end_span)
+[span_59](start_span)haproxy_service=$(systemctl status haproxy | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)[span_59](end_span)
+[span_60](start_span)xray_service=$(systemctl status xray | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)[span_60](end_span)
+[span_61](start_span)nginx_service=$(systemctl status nginx | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)[span_61](end_span)
+clear
+
+[span_62](start_span)if [[ $ssh_service == "running" ]]; then status_ssh="${GREEN}ON${NC}"; else status_ssh="${RED}OFF${NC}"; fi[span_62](end_span)
+[span_63](start_span)ssh_ws=$( systemctl status ws | grep Active | awk '{print $3}' | sed 's/(//g' | sed 's/)//g' )[span_63](end_span)
+[span_64](start_span)if [[ $ssh_ws == "running" ]]; then status_ws_epro="${GREEN}ON${NC}"; else status_ws_epro="${RED}OFF${NC}"; fi[span_64](end_span)
+[span_65](start_span)if [[ $haproxy_service == "running" ]]; then status_haproxy="${GREEN}ON${NC}"; else status_haproxy="${RED}OFF${NC}"; fi[span_65](end_span)
+[span_66](start_span)if [[ $xray_service == "running" ]]; then status_xray="${GREEN}ON${NC}"; else status_xray="${RED}OFF${NC}"; fi[span_66](end_span)
+[span_67](start_span)if [[ $nginx_service == "running" ]]; then status_nginx="${GREEN}ON${NC}"; else status_nginx="${RED}OFF${NC}"; fi[span_67](end_span)
+[span_68](start_span)if [[ $dropbear_service == "running" ]]; then status_dropbear="${GREEN}ON${NC}"; else status_dropbear="${RED}OFF${NC}"; fi[span_68](end_span)
+
+[span_69](start_span)vlx=$(grep -c -E "^#& " "/etc/xray/config.json")[span_69](end_span)
+[span_70](start_span)let vla=$vlx/2[span_70](end_span)
+[span_71](start_span)vmc=$(grep -c -E "^### " "/etc/xray/config.json")[span_71](end_span)
+[span_72](start_span)let vma=$vmc/2[span_72](end_span)
+[span_73](start_span)ssh1="$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)"[span_73](end_span)
+[span_74](start_span)trx=$(grep -c -E "^#! " "/etc/xray/config.json")[span_74](end_span)
+[span_75](start_span)let trb=$trx/2[span_75](end_span)
+[span_76](start_span)ssx=$(grep -c -E "^#ss# " "/etc/xray/config.json")[span_76](end_span)
+[span_77](start_span)let ssa=$ssx/2[span_77](end_span)
+
+[span_78](start_span)DROPBEAR_VERSION=$(dropbear -V 2>&1 | grep -oE 'v[0-9.]+')[span_78](end_span)
+[span_79](start_span)XRAY_VERSION=$(xray version 2>/dev/null | head -n 1 | awk '{print $2}')[span_79](end_span)
+
+# --- [ TAMPILAN UTAMA (UI) ] ---
+echo -e ""
+[span_80](start_span)echo -e "${CYAN}╭────────────────────────────────────────────────────────╮${NC}"[span_80](end_span)
+[span_81](start_span)echo -e "${CYAN}│${NC}\033[1;96m                  ✦  X Y Z  S T O R E  ✦                 ${CYAN}│${NC}"[span_81](end_span)
+[span_82](start_span)echo -e "${CYAN}╰────────────────────────────────────────────────────────╯${NC}"[span_82](end_span)
+
+# Informasi Sistem
+[span_83](start_span)echo -e "${CYAN}╭─────────────────── ${WHITE}SYSTEM INFORMATION${CYAN} ─────────────────╮${NC}"[span_83](end_span)
+[span_84](start_span)echo -e "${CYAN}│${NC} ${WHITE}OS System${NC}  : ${GREEN}$MODEL${NC}"[span_84](end_span)
+[span_85](start_span)echo -e "${CYAN}│${NC} ${WHITE}CPU Core${NC}   : ${GREEN}$CORE Cores${NC}       ${WHITE}RAM${NC} : ${GREEN}$uram / $RAM MB${NC}"[span_85](end_span)
+[span_86](start_span)echo -e "${CYAN}│${NC} ${WHITE}Uptime${NC}     : ${GREEN}$SERONLINE${NC}"[span_86](end_span)
+[span_87](start_span)echo -e "${CYAN}│${NC} ${WHITE}ISP${NC}        : ${GREEN}$ISP${NC} - ${YELLOW}$CITY${NC}"[span_87](end_span)
+[span_88](start_span)echo -e "${CYAN}│${NC} ${WHITE}Domain${NC}     : ${GREEN}$domain${NC}"[span_88](end_span)
+[span_89](start_span)echo -e "${CYAN}│${NC} ${WHITE}IP VPS${NC}     : ${GREEN}$IPVPS${NC}"[span_89](end_span)
+[span_90](start_span)echo -e "${CYAN}│${NC} ${WHITE}Dropbear${NC}   : ${YELLOW}$DROPBEAR_VERSION${NC}        ${WHITE}Xray${NC}: ${YELLOW}v$XRAY_VERSION${NC}"[span_90](end_span)
+[span_91](start_span)echo -e "${CYAN}╰────────────────────────────────────────────────────────╯${NC}"[span_91](end_span)
+
+# Status Layanan & Akun
+[span_92](start_span)echo -e "${CYAN}╭────────────── ${WHITE}SERVICES${CYAN} ───────── ${WHITE}ACCOUNTS${CYAN} ─────────────╮${NC}"[span_92](end_span)
+[span_93](start_span)echo -e "${CYAN}│${NC} ${WHITE}NGINX${NC}   : [ $status_nginx ]        │   ${WHITE}SSH${NC}     : ${YELLOW}$ssh1${NC} Users  ${CYAN}│${NC}"[span_93](end_span)
+[span_94](start_span)echo -e "${CYAN}│${NC} ${WHITE}XRAY${NC}    : [ $status_xray ]        │   ${WHITE}VMESS${NC}   : ${YELLOW}$vma${NC} Users  ${CYAN}│${NC}"[span_94](end_span)
+[span_95](start_span)echo -e "${CYAN}│${NC} ${WHITE}HAPROXY${NC} : [ $status_haproxy ]        │   ${WHITE}VLESS${NC}   : ${YELLOW}$vla${NC} Users  ${CYAN}│${NC}"[span_95](end_span)
+[span_96](start_span)echo -e "${CYAN}│${NC} ${WHITE}DROPBEAR${NC}: [ $status_dropbear ]        │   ${WHITE}TROJAN${NC}  : ${YELLOW}$trb${NC} Users  ${CYAN}│${NC}"[span_96](end_span)
+[span_97](start_span)echo -e "${CYAN}╰────────────────────────────────────────────────────────╯${NC}"[span_97](end_span)
+
+# Menu Interaktif
+[span_98](start_span)echo -e "${CYAN}╭─────────────────────── ${WHITE}MAIN MENU${CYAN} ──────────────────────╮${NC}"[span_98](end_span)
+[span_99](start_span)echo -e "${CYAN}│${NC} ${GREEN}[01]${NC} ${WHITE}• SSH MENU          ${CYAN}│${NC} ${GREEN}[10]${NC} ${WHITE}• BOT PANEL          ${CYAN}│${NC}"[span_99](end_span)
+[span_100](start_span)echo -e "${CYAN}│${NC} ${GREEN}[02]${NC} ${WHITE}• VMESS MENU        ${CYAN}│${NC} ${GREEN}[11]${NC} ${WHITE}• BOT NOTIF          ${CYAN}│${NC}"[span_100](end_span)
+[span_101](start_span)echo -e "${CYAN}│${NC} ${GREEN}[03]${NC} ${WHITE}• VLESS MENU        ${CYAN}│${NC} ${GREEN}[12]${NC} ${WHITE}• SPEEDTEST          ${CYAN}│${NC}"[span_101](end_span)
+[span_102](start_span)echo -e "${CYAN}│${NC} ${GREEN}[04]${NC} ${WHITE}• TROJAN MENU       ${CYAN}│${NC} ${GREEN}[13]${NC} ${WHITE}• ADD DOMAIN         ${CYAN}│${NC}"[span_102](end_span)
+[span_103](start_span)echo -e "${CYAN}│${NC} ${GREEN}[05]${NC} ${WHITE}• EDIT BANNER       ${CYAN}│${NC} ${GREEN}[14]${NC} ${WHITE}• RESTORE DATA       ${CYAN}│${NC}"[span_103](end_span)
+[span_104](start_span)echo -e "${CYAN}│${NC} ${GREEN}[06]${NC} ${WHITE}• BACKUP DATA       ${CYAN}│${NC} ${GREEN}[15]${NC} ${WHITE}• FIX CERT SSL       ${CYAN}│${NC}"[span_104](end_span)
+[span_105](start_span)echo -e "${CYAN}│${NC} ${GREEN}[07]${NC} ${WHITE}• INSTALL UDP       ${CYAN}│${NC} ${GREEN}[16]${NC} ${WHITE}• ALL SERVICES       ${CYAN}│${NC}"[span_105](end_span)
+[span_106](start_span)echo -e "${CYAN}│${NC} ${GREEN}[08]${NC} ${WHITE}• ZIVPN MANAGER     ${CYAN}│${NC} ${GREEN}[17]${NC} ${WHITE}• SOCKS5             ${CYAN}│${NC}"[span_106](end_span)
+[span_107](start_span)echo -e "${CYAN}│${NC} ${GREEN}[09]${NC} ${WHITE}• UPDATE SCRIPT     ${CYAN}│${NC} ${RED}[00]${NC} ${WHITE}• EXIT / KELUAR      ${CYAN}│${NC}"[span_107](end_span)
+[span_108](start_span)echo -e "${CYAN}╰────────────────────────────────────────────────────────╯${NC}"[span_108](end_span)
+
+# Detail Klien
+[span_109](start_span)echo -e "${CYAN}╭──────────────────── ${WHITE}CLIENT DETAILS${CYAN} ────────────────────╮${NC}"[span_109](end_span)
+[span_110](start_span)echo -e "${CYAN}│${NC} ${WHITE}Client Name${NC} : ${GREEN}$username${NC}"[span_110](end_span)
+[span_111](start_span)echo -e "${CYAN}│${NC} ${WHITE}Status${NC}      : $sts"[span_111](end_span)
+[span_112](start_span)echo -e "${CYAN}│${NC} ${WHITE}Expired On${NC}  : ${YELLOW}$exp${NC} ${GREEN}( $certifacate Days Left )${NC}"[span_112](end_span)
+[span_113](start_span)echo -e "${CYAN}╰────────────────────────────────────────────────────────╯${NC}"[span_113](end_span)
+
+# Input Pilihan
+[span_114](start_span)read -p " ✦ Select Menu [00-17] : " opt[span_114](end_span)
+echo -e ""
+
+# --- [ EKSEKUSI MENU ] ---
+case $opt in
+1 | 01)
+clear
+[span_115](start_span)m-sshws[span_115](end_span)
+;;
+2 | [span_116](start_span)02)[span_116](end_span)
+clear
+[span_117](start_span)m-vmess[span_117](end_span)
+;;
+3 | [span_118](start_span)03)[span_118](end_span)
+clear
+[span_119](start_span)m-vless[span_119](end_span)
+;;
+4 | [span_120](start_span)04)[span_120](end_span)
+clear
+[span_121](start_span)m-trojan[span_121](end_span)
+;;
+5 | [span_122](start_span)05)[span_122](end_span)
+clear
+[span_123](start_span)nano /etc/kyt.txt[span_123](end_span)
+;;
+6 | [span_124](start_span)06)[span_124](end_span)
+clear
+[span_125](start_span)m-bkp[span_125](end_span)
+;;
+7 | [span_126](start_span)07)[span_126](end_span)
+clear
+[span_127](start_span)wget https://raw.githubusercontent.com/xyzstoree/v7/main/udp-custom.sh && chmod +x udp-custom.sh && ./udp-custom.sh && rm udp-custom.sh[span_127](end_span)
+;;
+8 | [span_128](start_span)08)[span_128](end_span)
+clear
+[ -x /usr/local/bin/zivpn-manager ] || (apt update -y && wget -q https://raw.githubusercontent.com/xyzstoree/udp-zivpn/main/install.sh -O /usr/local/bin/install.sh && chmod +x /usr/local/bin/install.sh && /usr/local/bin/install.sh)[span_129](start_span); bash /usr/local/bin/zivpn-manager[span_129](end_span)
+;;
+9 | [span_130](start_span)09)[span_130](end_span)
+clear
+[span_131](start_span)wget https://raw.githubusercontent.com/xyzstoree/v7/main/update.sh && chmod +x update.sh && ./update.sh[span_131](end_span)
+;;
+10 | [span_132](start_span)10)[span_132](end_span)
+clear
+[span_133](start_span)add-bot-panel[span_133](end_span)
+;;
+[span_134](start_span)11)[span_134](end_span)
+clear
+[span_135](start_span)bot[span_135](end_span)
+;;
+[span_136](start_span)12)[span_136](end_span)
+clear
+[span_137](start_span)speedtest[span_137](end_span)
+;;
+[span_138](start_span)13)[span_138](end_span)
+clear
+[span_139](start_span)addhost[span_139](end_span)
+;;
+[span_140](start_span)14)[span_140](end_span)
+clear
+[span_141](start_span)restore[span_141](end_span)
+;;
+[span_142](start_span)15)[span_142](end_span)
+clear
+[span_143](start_span)fixcert[span_143](end_span)
+;;
+[span_144](start_span)16)[span_144](end_span)
+clear
+[span_145](start_span)m-services[span_145](end_span)
+;;
+[span_146](start_span)17)[span_146](end_span)
+clear
+[span_147](start_span)wget -O socks5.sh https://raw.githubusercontent.com/xyzstoree/socks5/main/socks5.sh && sudo bash socks5.sh[span_147](end_span)
+;;
+0 | [span_148](start_span)00)[span_148](end_span)
+[span_149](start_span)figlet XYZ STORE | lolcat[span_149](end_span)
+[span_150](start_span)exit[span_150](end_span)
+;;
+[span_151](start_span)x)[span_151](end_span)
+[span_152](start_span)menu[span_152](end_span)
+;;
+*[span_153](start_span))[span_153](end_span)
+[span_154](start_span)echo -e ""[span_154](end_span)
+[span_155](start_span)menu[span_155](end_span)
+;;
+[span_156](start_span)esac[span_156](end_span)
+[span_157](start_span)exit 0[span_157](end_span)
+
