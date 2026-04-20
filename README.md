@@ -53,7 +53,7 @@
   ### Langkah 3 — Jalankan perintah install
 
   ```bash
-  apt update -y && apt install -y wget curl && wget -q [https://raw.githubusercontent.com/xyzstoree/v7/main/setup.sh](https://raw.githubusercontent.com/xyzstoree/v7/main/setup.sh) && chmod +x setup.sh && ./setup.sh
+  apt update -y && apt install -y wget curl && wget -q https://raw.githubusercontent.com/xyzstoree/v7/main/setup.sh && chmod +x setup.sh && ./setup.sh
   ```
 
   ### Langkah 4 — Ikuti proses instalasi
@@ -67,7 +67,7 @@
   ## 🔄 PERINTAH UPDATE SCRIPT
 
   ```bash
-  wget -q [https://raw.githubusercontent.com/xyzstoree/v7/main/menu/update.sh](https://raw.githubusercontent.com/xyzstoree/v7/main/menu/update.sh) && chmod +x update.sh && ./update.sh
+  wget -q https://raw.githubusercontent.com/xyzstoree/v7/main/menu/update.sh && chmod +x update.sh && ./update.sh
   ```
 
   ---
@@ -123,5 +123,4 @@
   ## 📞 KONTAK ADMIN
 
   <a href="https://t.me/xyztunnn" target="_blank"><img src="https://img.shields.io/static/v1?style=for-the-badge&logo=Telegram&label=Telegram&message=Click%20Here&color=blue"></a>
-
   
