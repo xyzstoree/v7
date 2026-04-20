@@ -1,0 +1,83 @@
+#!/bin/bash
+
+# === WARNA ===
+RED='\033[1;91m'
+GREEN='\033[1;92m'
+YELLOW='\033[1;93m'
+NC='\033[0m'
+
+DROPBEAR_VERSION="2019.78"
+
+DROPBEAR_BIN="/usr/sbin/dropbear"
+DROPBEAR_LIB="/usr/lib/dropbear"
+DROPBEAR_CONFIG="/etc/dropbear"
+DROPBEAR_MAN="/usr/share/man/man8/dropbear.8.gz"
+
+if [[ $EUID -ne 0 ]]; then
+   echo -e "${RED}Jalankan sebagai root!${NC}"
+   exit 1
+fi
+
+clear
+echo -e "${GREEN}=== INSTALL DROPBEAR ${DROPBEAR_VERSION} ===${NC}"
+
+# stop service
+systemctl stop dropbear 2>/dev/null || service dropbear stop 2>/dev/null
+
+# backup
+if [ -f "$DROPBEAR_BIN" ]; then
+    cp $DROPBEAR_BIN /usr/sbin/dropbear.bak
+fi
+
+# hapus lama
+rm -f $DROPBEAR_BIN
+rm -rf $DROPBEAR_LIB $DROPBEAR_CONFIG
+
+# install dependensi
+if command -v apt >/dev/null 2>&1; then
+    apt update -y
+    apt install -y build-essential zlib1g-dev wget
+else
+    yum groupinstall "Development Tools" -y
+    yum install -y zlib-devel wget
+fi
+
+cd /tmp || exit 1
+
+echo -e "${YELLOW}Download Dropbear...${NC}"
+wget -q https://raw.githubusercontent.com/xyzstoree/dropbear/main/dropbear-${DROPBEAR_VERSION}.tar.bz2
+
+if [ ! -f "dropbear-${DROPBEAR_VERSION}.tar.bz2" ]; then
+    echo -e "${RED}Download gagal!${NC}"
+    exit 1
+fi
+
+tar -xjf dropbear-${DROPBEAR_VERSION}.tar.bz2
+cd dropbear-${DROPBEAR_VERSION} || exit 1
+
+echo -e "${YELLOW}Compile...${NC}"
+./configure --prefix=/usr && make -j$(nproc) && make install
+
+# rapikan binary
+mv /usr/bin/dropbear /usr/sbin/dropbear 2>/dev/null
+
+mkdir -p /etc/dropbear
+
+# generate key
+rm -f /etc/dropbear/dropbear_*_host_key
+
+dropbearkey -t rsa -f /etc/dropbear/dropbear_rsa_host_key
+dropbearkey -t ecdsa -f /etc/dropbear/dropbear_ecdsa_host_key
+
+chmod 600 /etc/dropbear/*_host_key
+
+# start service
+systemctl start dropbear 2>/dev/null || service dropbear start 2>/dev/null
+
+echo -e "${GREEN}CEK VERSI:${NC}"
+dropbear -V
+
+# cleanup
+cd /tmp
+rm -rf dropbear-${DROPBEAR_VERSION}*
+echo -e "${GREEN}SELESAI - Dropbear ${DROPBEAR_VERSION} terinstall${NC}"
