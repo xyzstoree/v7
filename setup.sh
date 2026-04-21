@@ -4,7 +4,8 @@
 sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null 2>&1
 sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null 2>&1
 
-REPO="http://rajaserver.web.id/v7/"
+# SUDAH DIGANTI KE GITHUB KAMU
+REPO="https://raw.githubusercontent.com/xyzstoree/v7/main/"
 
 # ==========================================
 # DEFINISI WARNA
@@ -82,7 +83,7 @@ function CEKIP() {
         NC='\e[0m'
         echo -e " ${RED}IP VPS Anda tidak terdaftar pada izin${NC}"
         echo -e " ${GREEN}Whatsapp = wa.me/6285960592386 ${NC}"
-        echo -e " ${GREEN}Telegram = @BangToyibbz ${NC}"
+        echo -e " ${GREEN}Telegram = @xyztunn ${NC}"
         sleep 3
         exit 1
     fi
@@ -119,7 +120,7 @@ function CEKIP() {
     echo -e " ${RED}Masa Aktif Script Kamu Sudah Habis${NC}"
     echo -e " ${RED}Silahkan Contact Admin Untuk Perpanjang ${NC}"
     echo -e " ${GREEN}Whatsapp = wa.me/6285960592386 ${NC}"
-    echo -e " ${GREEN}Telegram = @BangToyibbz ${NC}"
+    echo -e " ${GREEN}Telegram = @xyztunn ${NC}"
     sleep 3
     exit 1
     else
@@ -335,8 +336,11 @@ function setup_install() {
 function iinfo() {
     domain=$(cat /etc/xray/domain)
     TIMES="10"
+    
+    # SILAKAN ISI ID TELEGRAM DAN TOKEN BOT KAMU DI BAWAH INI
     CHATID="ID_TELE"
     KEY="TOKEN_TELE"
+    
     URL="https://api.telegram.org/bot$KEY/sendMessage"
     ISP=$(cat /etc/xray/isp)
     CITY=$(cat /etc/xray/city)
@@ -352,7 +356,7 @@ function iinfo() {
 
     TEXT="
 <code>━━━━━━━━━━━━━━━━━━━━</code>
-<code>⚠️ AUTOSCRIPT PREMIUM ⚠️</code>
+<code>⚠️ AUTOSCRIPT XYUZ STORE ⚠️</code>
 <code>━━━━━━━━━━━━━━━━━━━━</code>
 <code>NAMA : </code><code>${author}</code>
 <code>WAKTU : </code><code>${TIME} WIB</code>
@@ -364,7 +368,7 @@ function iinfo() {
 <code>EXP SCRIPT : </code><code>$EXP Hari</code>
 <code>━━━━━━━━━━━━━━━━━━━━</code>
 <i> Notifikasi Installer Script...</i>
-"'&reply_markup={"inline_keyboard":[[{"text":"🔥ᴏʀᴅᴇʀ","url":"https://t.me/BangToyibbz"},{"text":"🔥GRUP","url":"https://t.me/RAJA_VPN_STORE"}]]}'
+"'&reply_markup={"inline_keyboard":[[{"text":"🔥HUBUNGI ADMIN","url":"https://t.me/xyztunn"}]]}'
     
     curl -s --max-time $TIMES -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
     clear
@@ -397,8 +401,9 @@ mkdir -p /var/lib/ >/dev/null 2>&1
 echo "IP=" >> /var/lib/ipvps.conf
 
 clear
-name="ARI STORE"
-echo "ARI STORE" > /etc/xray/username
+# SUDAH DIGANTI MENJADI XYUZ STORE
+name="XYUZ STORE"
+echo "XYUZ STORE" > /etc/xray/username
 echo ""
 clear
 author=$name
@@ -439,16 +444,7 @@ sysctl -p >/dev/null 2>&1
 CEKIP
 Installasi
 
-# ==========================================
-# SETUP DNS
-# ==========================================
-sudo systemctl disable systemd-resolved
-sudo systemctl stop systemd-resolved
-sudo rm -rf /etc/resolv.config
-echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" | sudo tee /etc/resolv.conf
-sudo chattr +i /etc/resolv.conf
-sudo systemctl start systemd-resolved
-sudo systemctl enable systemd-resolved
+# BLOK SETUP DNS (MENGHANCURKAN RESOLV.CONF) SUDAH DIHAPUS
 
 # ==========================================
 # SETUP FINAL
