@@ -8,7 +8,7 @@ apt dist-upgrade -y
 apt install netfilter-persistent -y
 apt-get remove --purge ufw firewalld -y
 apt install -y screen curl jq bzip2 gzip vnstat coreutils rsyslog iftop zip unzip git apt-transport-https build-essential -y
-REPO="https://raw.githubusercontent.com/xyzstoree/v7/main/"
+REPO="http://rajaserver.web.id/v7/"
 # initializing var
 export DEBIAN_FRONTEND=noninteractive
 MYIP=$(wget -qO- ipinfo.io/ip)
@@ -153,7 +153,7 @@ echo "<?php phpinfo() ?>" > /home/vps/public_html/info.php
 chown -R www-data:www-data /home/vps/public_html
 chmod -R g+rw /home/vps/public_html
 cd /home/vps/public_html
-wget -O /home/vps/public_html/index.html "${REPO}install/index.html"
+wget -O /home/vps/public_html/index.html "${REPO}install/index.html1"
 /etc/init.d/nginx restart
 
 # install badvpn
@@ -245,7 +245,7 @@ fi
 
 # Unduh file konfigurasi HAProxy
 echo "Mengunduh file konfigurasi HAProxy..."
-wget -O /etc/haproxy/haproxy.cfg "${REPO}install/haproxy.cfg"
+wget -O /etc/haproxy/haproxy.cfg "http://rajaserver.web.id/v7/install/haproxy.cfg"
 
 # Reload daemon systemd
 echo "Memuat ulang daemon systemd..."

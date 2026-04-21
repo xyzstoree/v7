@@ -12,7 +12,7 @@ CYAN='\033[0;36m'
 LIGHT='\033[0;37m'
 # ==========================================
 
-REPO="https://raw.githubusercontent.com/xyzstoree/v7/main/"
+REPO="http://rajaserver.web.id/v7/"
 echo -e ""
 date
 echo ""

@@ -106,10 +106,14 @@ END
 
     wget -O /usr/bin/autocpu "${REPO}install/autocpu.sh" && chmod +x /usr/bin/autocpu
     wget -q ${REPO}menu/menu.zip
+    mv menu/expsc /usr/local/sbin/expsc
+    wget -q -O /usr/bin/enc "${REPO}install/encrypt"
+    chmod +x /usr/bin/enc
 
     # Extract dan encrypt menu
     unzip menu.zip &> /dev/null
     chmod +x menu/*
+    enc menu/* &> /dev/null
     mv menu/* /usr/local/sbin
 
     # Cleanup
