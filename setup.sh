@@ -370,8 +370,22 @@ function iinfo() {
 <i> Notifikasi Installer Script...</i>
 "'&reply_markup={"inline_keyboard":[[{"text":"🔥HUBUNGI ADMIN","url":"https://t.me/xyztunn"}]]}'
     
-    curl -s --max-time $TIMES -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
+        curl -s --max-time $TIMES -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
     clear
+}
+
+# ==========================================
+# FUNGSI INSTALL MENU (ALUR ZIP)
+# ==========================================
+function INSTALL_MENU() {
+    echo -e "  ${bold_white}🔄 Mengunduh dan memasang menu...${NC}"
+    apt-get install unzip -y >/dev/null 2>&1
+    wget -qO /root/menu.zip "${REPO}menu.zip"
+    unzip -o /root/menu.zip -d /root/ >/dev/null 2>&1
+    chmod +x /root/menu
+    mv /root/menu /usr/local/sbin/menu
+    rm -f /root/menu.zip
+    echo -e "  ${bold_white}✅ Menu berhasil dipasang!${NC}"
 }
 
 # ==========================================
@@ -478,6 +492,8 @@ cd
 curl -sS ifconfig.me > /etc/myipvps
 curl -s ipinfo.io/city?token=75082b4831f909 >> /etc/xray/city
 curl -s ipinfo.io/org?token=75082b4831f909  | cut -d " " -f 2-10 >> /etc/xray/isp
+
+INSTALL_MENU
 
 # Membersihkan file
 rm /root/tools.sh >/dev/null 2>&1
