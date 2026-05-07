@@ -21,8 +21,8 @@ LIME='\e[38;5;155m'
 ungu="\e[38;5;99m"
 NC='\033[0m'
 TIMES="10"
-CHATID="1962241851"
-KEY="8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE"
+CHATID="7768199065"
+KEY="7854131719:AAElutfvF5Qp9tGXGQw7pUqFiJGNyDdVlHs"
 URL="https://api.telegram.org/bot$KEY/sendMessage"
 clear
 export IP=$( curl -sS icanhazip.com )
@@ -30,7 +30,7 @@ clear
 clear && clear && clear
 clear;clear;clear
 echo -e "${BIWhite}----------------------------------------------------------${NC}"  
-echo -e "${LIME}Script Tunneling VPN Premium Ari Project${NC}"
+echo -e "${LIME}Script Tunneling VPN Premium Xyz Tunnel${NC}"
 echo -e "${BIWhite}----------------------------------------------------------${NC}"
 echo ""
 sleep 2
