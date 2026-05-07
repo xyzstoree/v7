@@ -5,7 +5,7 @@ export DEBIAN_FRONTEND=noninteractive
 FONT='\033[0m'
 Green="\e[92;1m"
 YELLOW='\033[1;33m'
-RED='\033[0;31m'W
+RED='\033[0;31m'
 BLUE="\033[36m"
 GREENBG="\033[42;37m"
 REDBG="\033[41;37m"
@@ -193,7 +193,7 @@ print_success "Directory Xray"
 apt upgrade -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
-apt install -y xxd bzip2 wget curl sudo jq lsof socat net-tools bc coreutils build-essential bsdmainutils screen dos2unix openvpn
+apt install -y xxd bzip2 wget curl sudo jq lsof socat net-tools bc coreutils build-essential bsdmainutils screen dos2unix openvpn unzip p7zip-full
 apt dist-upgrade -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
@@ -367,7 +367,7 @@ chmod +x /root/.acme.sh/acme.sh
 /root/.acme.sh/acme.sh --set-default-ca --server letsencrypt
 /root/.acme.sh/acme.sh --issue -d $domain --standalone -k ec-256
 ~/.acme.sh/acme.sh --installcert -d $domain --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key --ecc
-chmod 777 /etc/xray/xray.key
+chmod 600 /etc/xray/xray.key
 print_success "SSL Certificate"
 }
 function make_folder_xray() {
@@ -795,12 +795,55 @@ print_success "All Packet"
 function menu(){
 clear
 print_install "Memasang Menu Packet"
-rm -f menu.zip
-wget  ${REPO}limit/menu.zip
-7z x menu.zip -p'coding_sendiri_lah_goblok_cuman_bisa_nyuri'
-chmod +x menu/*
-mv -f menu/* /usr/local/sbin/
-dos2unix /usr/local/sbin/install-plugin 2>/dev/null
+cd /root || exit 1
+rm -rf menu menu.zip
+
+if ! command -v 7z >/dev/null 2>&1; then
+    echo "7z belum ada, install p7zip-full..."
+    apt update -y
+    apt install -y p7zip-full
+fi
+
+if ! command -v 7z >/dev/null 2>&1; then
+    echo "ERROR: 7z masih belum tersedia. Install p7zip-full gagal."
+    exit 1
+fi
+
+if ! wget -O menu.zip "${REPO}limit/menu.zip"; then
+    echo "ERROR: gagal download menu.zip dari ${REPO}limit/menu.zip"
+    exit 1
+fi
+
+if ! file menu.zip | grep -qiE '7-zip|Zip archive'; then
+    echo "ERROR: menu.zip bukan arsip valid. Kemungkinan link 404/HTML."
+    file menu.zip
+    exit 1
+fi
+
+if ! 7z x menu.zip -p'coding_sendiri_lah_goblok_cuman_bisa_nyuri'; then
+    echo "ERROR: gagal extract menu.zip. Cek password atau file menu.zip."
+    exit 1
+fi
+
+if [ -d menu ]; then
+    chmod +x menu/*
+    mv -f menu/* /usr/local/sbin/
+elif [ -f /root/menu ]; then
+    chmod +x /root/menu
+    mv -f /root/menu /usr/local/sbin/menu
+else
+    echo "ERROR: folder/file menu tidak ditemukan setelah extract"
+    find /root -maxdepth 2 -type f \( -name "menu" -o -name "m-*" \)
+    exit 1
+fi
+
+if [ ! -x /usr/local/sbin/menu ]; then
+    echo "ERROR: /usr/local/sbin/menu belum tersedia setelah pemasangan menu."
+    ls -lah /usr/local/sbin/ | tail -50
+    exit 1
+fi
+
+dos2unix /usr/local/sbin/install-plugin 2>/dev/null || true
 rm -rf menu menu.zip update.sh
 }
 function profile(){
@@ -896,7 +939,7 @@ nginx_install
 base_package
 make_folder_xray
 pasang_domain
-password_default
+if declare -F password_default >/dev/null 2>&1; then password_default; else echo "[INFO] password_default tidak ditemukan, dilewati"; fi
 pasang_ssl
 install_xray
 ssh
@@ -921,13 +964,12 @@ function dnsxx(){
 # ==========================================
 # SETUP DNS
 # ==========================================
-sudo systemctl disable systemd-resolved > /dev/null 2>&1
-sudo systemctl stop systemd-resolved > /dev/null 2>&1
-sudo rm -rf /etc/resolv.config > /dev/null 2>&1
-echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" | sudo tee /etc/resolv.conf
-sudo chattr +i /etc/resolv.conf > /dev/null 2>&1
-sudo systemctl start systemd-resolved > /dev/null 2>&1
-sudo systemctl enable systemd-resolved > /dev/null 2>&1
+sudo chattr -i /etc/resolv.conf >/dev/null 2>&1 || true
+sudo systemctl disable systemd-resolved > /dev/null 2>&1 || true
+sudo systemctl stop systemd-resolved > /dev/null 2>&1 || true
+sudo rm -f /etc/resolv.conf > /dev/null 2>&1
+printf "nameserver 8.8.8.8\nnameserver 8.8.4.4\n" | sudo tee /etc/resolv.conf >/dev/null
+sudo chattr +i /etc/resolv.conf > /dev/null 2>&1 || true
 }
 instal
 echo ""
