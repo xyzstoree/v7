@@ -30,7 +30,7 @@ clear
 clear && clear && clear
 clear;clear;clear
 echo -e "${BIWhite}----------------------------------------------------------${NC}"  
-echo -e "${LIME}Script Tunneling VPN Premium Xyz Tunnel${NC}"
+echo -e "${LIME}Script Tunneling VPN Premium Ari Project${NC}"
 echo -e "${BIWhite}----------------------------------------------------------${NC}"
 echo ""
 sleep 2
@@ -163,7 +163,7 @@ mkdir -p /etc/xray
 curl -s ifconfig.me > /etc/xray/ipvps
 touch /etc/xray/domain
 mkdir -p /var/log/xray
-chown www-data.www-data /var/log/xray
+chown www-data:www-data /var/log/xray
 chmod +x /var/log/xray
 touch /var/log/xray/access.log
 touch /var/log/xray/error.log
@@ -193,7 +193,7 @@ print_success "Directory Xray"
 apt upgrade -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
-apt install -y xxd bzip2 wget curl sudo jq lsof socat net-tools bc coreutils build-essential bsdmainutils screen dos2unix openvpn unzip p7zip-full
+apt install -y xxd bzip2 wget curl sudo jq lsof socat net-tools bc coreutils build-essential bsdmainutils screen dos2unix openvpn
 apt dist-upgrade -y \
   -o Dpkg::Options::="--force-confdef" \
   -o Dpkg::Options::="--force-confold"
@@ -242,8 +242,7 @@ apt dist-upgrade -y
 apt install -y at zip pwgen openssl htop netcat-openbsd socat cron bash-completion figlet ruby wondershaper
 gem install lolcat
 apt install -y iptables iptables-persistent
-apt install -y ntpdate chrony
-ntpdate pool.ntp.org
+apt install -y chrony
 systemctl enable netfilter-persistent
 systemctl restart netfilter-persistent
 systemctl enable --now chrony
@@ -367,7 +366,7 @@ chmod +x /root/.acme.sh/acme.sh
 /root/.acme.sh/acme.sh --set-default-ca --server letsencrypt
 /root/.acme.sh/acme.sh --issue -d $domain --standalone -k ec-256
 ~/.acme.sh/acme.sh --installcert -d $domain --fullchainpath /etc/xray/xray.crt --keypath /etc/xray/xray.key --ecc
-chmod 600 /etc/xray/xray.key
+chmod 777 /etc/xray/xray.key
 print_success "SSL Certificate"
 }
 function make_folder_xray() {
@@ -415,7 +414,7 @@ function install_xray() {
 clear
 print_install "Core Xray Latest Version"
 domainSock_dir="/run/xray";! [ -d $domainSock_dir ] && mkdir  $domainSock_dir
-chown www-data.www-data $domainSock_dir
+chown www-data:www-data $domainSock_dir
 #latest_version="$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases | grep tag_name | sed -E 's/.*"v(.*)".*/\1/' | head -n 1)"
 #bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u www-data --version $latest_version
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u www-data --version 25.8.31
@@ -737,17 +736,12 @@ wget  -q -O /usr/local/share/xray/geosite.dat "https://github.com/Loyalsoldier/v
 wget  -q -O /usr/local/share/xray/geoip.dat "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" >/dev/null 2>&1
 wget  -O /usr/sbin/ftvpn "${REPO}limit/ftvpn" >/dev/null 2>&1
 chmod +x /usr/sbin/ftvpn
-iptables -A FORWARD -m string --string "get_peers" --algo bm -j DROP
-iptables -A FORWARD -m string --string "announce_peer" --algo bm -j DROP
-iptables -A FORWARD -m string --string "find_node" --algo bm -j DROP
-iptables -A FORWARD -m string --algo bm --string "BitTorrent" -j DROP
-iptables -A FORWARD -m string --algo bm --string "BitTorrent protocol" -j DROP
-iptables -A FORWARD -m string --algo bm --string "peer_id=" -j DROP
-iptables -A FORWARD -m string --algo bm --string ".torrent" -j DROP
-iptables -A FORWARD -m string --algo bm --string "announce.php?passkey=" -j DROP
-iptables -A FORWARD -m string --algo bm --string "torrent" -j DROP
-iptables -A FORWARD -m string --algo bm --string "announce" -j DROP
-iptables -A FORWARD -m string --algo bm --string "info_hash" -j DROP
+# BitTorrent block rules (idempoten - cegah duplikasi yang bikin softirq tinggi)
+for STR in "get_peers" "announce_peer" "find_node" "BitTorrent" "BitTorrent protocol" \
+           "peer_id=" ".torrent" "announce.php?passkey=" "torrent" "announce" "info_hash"; do
+  iptables -C FORWARD -m string --string "$STR" --algo bm -j DROP 2>/dev/null || \
+    iptables -A FORWARD -m string --string "$STR" --algo bm -j DROP
+done
 iptables-save > /etc/iptables.up.rules
 iptables-restore -t < /etc/iptables.up.rules
 netfilter-persistent save
@@ -795,67 +789,31 @@ print_success "All Packet"
 function menu(){
 clear
 print_install "Memasang Menu Packet"
-cd /root || exit 1
-rm -rf menu menu.zip
-
-if ! command -v 7z >/dev/null 2>&1; then
-    echo "7z belum ada, install p7zip-full..."
-    apt update -y
-    apt install -y p7zip-full
-fi
-
-if ! command -v 7z >/dev/null 2>&1; then
-    echo "ERROR: 7z masih belum tersedia. Install p7zip-full gagal."
-    exit 1
-fi
-
-if ! wget -O menu.zip "${REPO}limit/menu.zip"; then
-    echo "ERROR: gagal download menu.zip dari ${REPO}limit/menu.zip"
-    exit 1
-fi
-
-if ! file menu.zip | grep -qiE '7-zip|Zip archive'; then
-    echo "ERROR: menu.zip bukan arsip valid. Kemungkinan link 404/HTML."
-    file menu.zip
-    exit 1
-fi
-
-if ! 7z x menu.zip -p'coding_sendiri_lah_goblok_cuman_bisa_nyuri'; then
-    echo "ERROR: gagal extract menu.zip. Cek password atau file menu.zip."
-    exit 1
-fi
-
-if [ -d menu ]; then
-    chmod +x menu/*
-    mv -f menu/* /usr/local/sbin/
-elif [ -f /root/menu ]; then
-    chmod +x /root/menu
-    mv -f /root/menu /usr/local/sbin/menu
-else
-    echo "ERROR: folder/file menu tidak ditemukan setelah extract"
-    find /root -maxdepth 2 -type f \( -name "menu" -o -name "m-*" \)
-    exit 1
-fi
-
-if [ ! -x /usr/local/sbin/menu ]; then
-    echo "ERROR: /usr/local/sbin/menu belum tersedia setelah pemasangan menu."
-    ls -lah /usr/local/sbin/ | tail -50
-    exit 1
-fi
-
-dos2unix /usr/local/sbin/install-plugin 2>/dev/null || true
+rm -f menu.zip
+wget  ${REPO}limit/menu.zip
+7z x menu.zip -p'coding_sendiri_lah_goblok_cuman_bisa_nyuri'
+chmod +x menu/*
+mv -f menu/* /usr/local/sbin/
+dos2unix /usr/local/sbin/install-plugin 2>/dev/null
 rm -rf menu menu.zip update.sh
 }
 function profile(){
 clear
-cat >/root/.profile <<EOF
+cat >/root/.profile <<'EOF'
 if [ "$BASH" ]; then
-if [ -f ~/.bashrc ]; then
-. ~/.bashrc
-fi
+  if [ -f ~/.bashrc ]; then
+    . ~/.bashrc
+  fi
 fi
 mesg n || true
-menu
+# Hanya jalankan menu pada shell INTERAKTIF (cegah hang saat login SSH non-interaktif / scp / rsync)
+case $- in
+  *i*)
+    if [ -t 0 ] && [ -t 1 ]; then
+      command -v menu >/dev/null 2>&1 && menu
+    fi
+    ;;
+esac
 EOF
 cat >/etc/cron.d/xp_all <<-END
 SHELL=/bin/sh
@@ -896,13 +854,14 @@ EOF
 
 echo "/bin/false" >>/etc/shells
 echo "/usr/sbin/nologin" >>/etc/shells
-cat >/etc/rc.local <<EOF
+cat >/etc/rc.local <<'EOF'
 #!/bin/sh -e
 # rc.local
-# By default this script does nothing.
-iptables -I INPUT -p udp --dport 5300 -j ACCEPT
-iptables -t nat -I PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 5300
-systemctl restart netfilter-persistent
+# Allow SlowDNS port (jika digunakan) tanpa membajak DNS sistem
+iptables -C INPUT -p udp --dport 5300 -j ACCEPT 2>/dev/null || \
+  iptables -I INPUT -p udp --dport 5300 -j ACCEPT
+# CATATAN: REDIRECT port 53 -> 5300 DIHAPUS karena memutus resolusi DNS sistem
+# dan menyebabkan SSH/login lag 3-5 menit setelah reboot.
 exit 0
 EOF
 
@@ -939,7 +898,7 @@ nginx_install
 base_package
 make_folder_xray
 pasang_domain
-if declare -F password_default >/dev/null 2>&1; then password_default; else echo "[INFO] password_default tidak ditemukan, dilewati"; fi
+password_default
 pasang_ssl
 install_xray
 ssh
@@ -964,12 +923,13 @@ function dnsxx(){
 # ==========================================
 # SETUP DNS
 # ==========================================
-sudo chattr -i /etc/resolv.conf >/dev/null 2>&1 || true
-sudo systemctl disable systemd-resolved > /dev/null 2>&1 || true
-sudo systemctl stop systemd-resolved > /dev/null 2>&1 || true
-sudo rm -f /etc/resolv.conf > /dev/null 2>&1
-printf "nameserver 8.8.8.8\nnameserver 8.8.4.4\n" | sudo tee /etc/resolv.conf >/dev/null
-sudo chattr +i /etc/resolv.conf > /dev/null 2>&1 || true
+sudo systemctl disable systemd-resolved > /dev/null 2>&1
+sudo systemctl stop systemd-resolved > /dev/null 2>&1
+sudo rm -rf /etc/resolv.config > /dev/null 2>&1
+echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" | sudo tee /etc/resolv.conf
+sudo chattr +i /etc/resolv.conf > /dev/null 2>&1
+sudo systemctl start systemd-resolved > /dev/null 2>&1
+sudo systemctl enable systemd-resolved > /dev/null 2>&1
 }
 instal
 echo ""
