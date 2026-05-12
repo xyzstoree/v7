@@ -16,6 +16,7 @@ TEXT="
 curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
 }
 function vmip(){
+while true; do
 #LIMITVMESSIP
 echo -n > /var/log/xray/access.log
 sleep 440
@@ -39,8 +40,12 @@ data=( `ls /etc/kyt/limit/vmess/ip`);
         fi
         sleep 0.1
     done
+sleep 30
+done
+
 }
 function vlip(){
+while true; do
 #LIMITVLESSIP
 echo -n > /var/log/xray/access.log
 sleep 440
@@ -64,8 +69,12 @@ data=( `ls /etc/kyt/limit/vless/ip`);
         fi
         sleep 0.1
     done
+sleep 30
+done
+
 }
 function trip(){
+while true; do
 #LIMITIPTROJAN
 echo -n > /var/log/xray/access.log
 sleep 440
@@ -89,6 +98,9 @@ data=( `ls /etc/kyt/limit/trojan/ip`);
         fi
         sleep 0.1
     done
+sleep 30
+done
+
 }
 
 if [[ ${1} == "vmip" ]]; then

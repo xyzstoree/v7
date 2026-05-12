@@ -123,3 +123,9 @@ Subsystem	sftp	/usr/lib/openssh/sftp-server
 #	PermitTTY no
 #	ForceCommand cvs server
 Banner /etc/kyt.txt
+
+# === FIX: cegah lag/login delay setelah reboot ===
+UseDNS no
+GSSAPIAuthentication no
+ClientAliveInterval 60
+ClientAliveCountMax 3
