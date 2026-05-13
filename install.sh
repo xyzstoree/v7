@@ -799,6 +799,11 @@ rm -rf menu menu.zip update.sh
 }
 function profile(){
 clear
+# FIX: Set PATH lengkap di .bashrc supaya command menu, reboot, dll bisa dipanggil langsung
+cat > /root/.bashrc <<'BASHRCEOF'
+# ~/.bashrc: executed by bash(1) for non-login shells.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+BASHRCEOF
 cat >/root/.profile <<'EOF'
 if [ "$BASH" ]; then
   if [ -f ~/.bashrc ]; then
