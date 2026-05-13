@@ -30,7 +30,7 @@ clear
 clear && clear && clear
 clear;clear;clear
 echo -e "${BIWhite}----------------------------------------------------------${NC}"  
-echo -e "${LIME}Script Tunneling VPN Premium Ari Project${NC}"
+echo -e "${LIME}Bang gip alok bang, bang gip alok bang${NC}"
 echo -e "${BIWhite}----------------------------------------------------------${NC}"
 echo ""
 sleep 2
