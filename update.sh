@@ -3,9 +3,6 @@ dateFromServer=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Dat
 biji=`date +"%Y-%m-%d" -d "$dateFromServer"`
 red() { echo -e "\\033[32;1m${*}\\033[0m"; }
 clear
-if ! command -v 7z >/dev/null 2>&1; then
-    apt update && apt install p7zip-full -y
-fi
 fun_bar() {
     CMD[0]="$1"
     CMD[1]="$2"
@@ -33,13 +30,19 @@ fun_bar() {
     tput cnorm
 }
 res1() {
-rm -f menu.zip
-wget -O menu.zip https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu.zip
-7z x menu.zip -p'coding_sendiri_lah_goblok_cuman_bisa_nyuri'
-chmod +x menu/*
-mv -f menu/* /usr/local/sbin/
-dos2unix /usr/local/sbin/install-plugin 2>/dev/null
-rm -rf menu menu.zip update.sh
+    wget https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu.zip
+    unzip menu.zip
+    chmod +x menu/*
+    mv menu/* /usr/local/sbin
+    sudo dos2unix /usr/local/sbin/*
+    rm -rf menu
+    rm -rf menu.zip
+    rm -rf update.sh
+    # Register welcome sebagai login script
+    if [ -d /etc/profile.d ]; then
+        echo '[ -x /usr/local/sbin/welcome ] && /usr/local/sbin/welcome' > /etc/profile.d/xyz-welcome.sh
+        chmod +x /etc/profile.d/xyz-welcome.sh
+    fi
 }
 netfilter-persistent
 clear
