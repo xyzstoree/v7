@@ -48,6 +48,7 @@
         "clients": [
           {
             "id": "7c827038-f04f-4c97-a737-1899b0336c65"
+            //#vless
           }
         ]
       },
@@ -67,6 +68,7 @@
           {
             "id": "7c827038-f04f-4c97-a737-1899b0336c65",
             "alterId": 0
+            //#vmess
           }
         ]
       },
@@ -86,6 +88,7 @@
         "clients": [
           {
             "password": "7c827038-f04f-4c97-a737-1899b0336c65"
+            //#trojanws
           }
         ],
         "udp": true
@@ -106,6 +109,7 @@
           {
             "method": "aes-128-gcm",
             "password": "7c827038-f04f-4c97-a737-1899b0336c65"
+            //#ssws
           }
         ],
         "network": "tcp,udp"
@@ -126,6 +130,7 @@
         "clients": [
           {
             "id": "7c827038-f04f-4c97-a737-1899b0336c65"
+            //#vlessgrpc
           }
         ]
       },
@@ -145,6 +150,7 @@
           {
             "id": "7c827038-f04f-4c97-a737-1899b0336c65",
             "alterId": 0
+            //#vmessgrpc
           }
         ]
       },
@@ -164,6 +170,7 @@
         "clients": [
           {
             "password": "7c827038-f04f-4c97-a737-1899b0336c65"
+            //#trojangrpc
           }
         ]
       },
@@ -183,6 +190,7 @@
           {
             "method": "aes-128-gcm",
             "password": "7c827038-f04f-4c97-a737-1899b0336c65"
+            //#ssgrpc
           }
         ],
         "network": "tcp,udp"
@@ -263,53 +271,6 @@
         "protocol": [
           "bittorrent"
         ]
-      },
-      {
-        "type": "field",
-        "outboundTag": "proxy",
-        "ip": [
-          "1.1.1.1/32",
-          "1.0.0.1/32",
-          "8.8.8.8/32",
-          "8.8.4.4/32",
-          "geoip:us",
-          "geoip:ca",
-          "geoip:cloudflare",
-          "geoip:cloudfront",
-          "geoip:facebook",
-          "geoip:fastly",
-          "geoip:google",
-          "geoip:netflix",
-          "geoip:telegram",
-          "geoip:yt",
-          "geoip:twitter"
-        ]
-      },
-      {
-        "type": "field",
-        "outboundTag": "direct",
-        "ip": [
-          "223.5.5.5/32",
-          "119.29.29.29/32",
-          "180.76.76.76/32",
-          "114.114.114.114/32",
-          "geoip:cn",
-          "geoip:jp",
-          "geoip:in",
-          "geoip:private"
-        ]
-      },
-      {
-        "type": "field",
-        "outboundTag": "reject",
-        "domain": [
-          "geosite:category-ads-all"
-        ]
-      },
-      {
-        "type": "field",
-        "outboundTag": "direct",
-        "network": "tcp,udp"
       }
     ]
   },
