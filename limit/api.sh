@@ -102,9 +102,12 @@ setup_bot() {
     read -rp "Chat ID: " CHAT_ID
 
     echo "export KEYAPI=\"$BOT_TOKEN\"" >/etc/botapi.conf
-    echo "export CHATID=\"$CHAT_ID\"" >>/etc/botapi.conf
-    grep -q "botapi.conf" /etc/profile || echo "source /etc/botapi.conf" >> /etc/profile
-    source /etc/botapi.conf
+echo "export CHATID=\"$CHAT_ID\"" >>/etc/botapi.conf
+chmod 600 /etc/botapi.conf
+# guarded source: aman walau file ke-delete
+sed -i '\|source /etc/botapi.conf|d; \|botapi.conf|d' /etc/profile
+echo '[ -r /etc/botapi.conf ] && . /etc/botapi.conf' >> /etc/profile
+. /etc/botapi.conf
 
     MESSAGE="ðŸš€ *api-ari Installed Successfully* ðŸš€
 ðŸ”‘ *Auth Key:* \`$AUTH_KEY\`
