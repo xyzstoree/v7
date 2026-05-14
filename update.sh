@@ -38,14 +38,14 @@ res1() {
     rm -rf menu
     rm -rf menu.zip
     rm -rf update.sh
-    # Register welcome sebagai login script
-    if [ -d /etc/profile.d ]; then
-        echo '[ -x /usr/local/sbin/welcome ] && /usr/local/sbin/welcome' > /etc/profile.d/xyz-welcome.sh
-        chmod +x /etc/profile.d/xyz-welcome.sh
-    fi
-    # Fix .profile lama yg auto-call menu langsung (ganti ke welcome)
+    # Hapus profile.d lama biar ga double
+    rm -f /etc/profile.d/xyz-welcome.sh
+    # Fix .profile: ganti auto-call menu jadi welcome (hanya 1 tempat yg panggil)
     if grep -q "command -v menu" /root/.profile 2>/dev/null; then
         sed -i 's|command -v menu >/dev/null 2>&1 && menu|command -v welcome >/dev/null 2>\&1 \&\& welcome|g' /root/.profile
+    elif ! grep -q "command -v welcome" /root/.profile 2>/dev/null; then
+        # Kalau .profile tidak ada sama sekali (fresh install baru), tambahkan
+        echo 'command -v welcome >/dev/null 2>&1 && welcome' >> /root/.profile
     fi
 }
 netfilter-persistent
