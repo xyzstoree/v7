@@ -43,6 +43,10 @@ res1() {
         echo '[ -x /usr/local/sbin/welcome ] && /usr/local/sbin/welcome' > /etc/profile.d/xyz-welcome.sh
         chmod +x /etc/profile.d/xyz-welcome.sh
     fi
+    # Fix .profile lama yg auto-call menu langsung (ganti ke welcome)
+    if grep -q "command -v menu" /root/.profile 2>/dev/null; then
+        sed -i 's|command -v menu >/dev/null 2>&1 && menu|command -v welcome >/dev/null 2>\&1 \&\& welcome|g' /root/.profile
+    fi
 }
 netfilter-persistent
 clear
