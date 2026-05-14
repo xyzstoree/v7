@@ -815,7 +815,7 @@ mesg n || true
 case $- in
   *i*)
     if [ -t 0 ] && [ -t 1 ]; then
-      command -v menu >/dev/null 2>&1 && menu
+      command -v welcome >/dev/null 2>&1 && welcome
     fi
     ;;
 esac
@@ -964,6 +964,6 @@ secs_to_human "$(($(date +%s) - ${start}))"
 sudo hostnamectl set-hostname $username
 echo -e "${green} Script Successfull Installed"
 echo ""
-echo -e "Menu akan dibuka..."
-sleep 2
-/usr/local/sbin/menu
+echo -e "Membuka welcome screen..."
+sleep 1
+/usr/local/sbin/welcome
