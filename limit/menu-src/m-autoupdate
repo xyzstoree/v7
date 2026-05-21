@@ -4,7 +4,7 @@ GREEN='\033[0;36m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
 CRON_FILE="/etc/cron.d/xyz-autoupdate"
-UPDATE_CMD='wget -q https://raw.githubusercontent.com/xyzstores/v7/main/update.sh -O /tmp/xyz-update.sh && chmod +x /tmp/xyz-update.sh && /tmp/xyz-update.sh >/var/log/xyz-autoupdate.log 2>&1'
+UPDATE_CMD='wget -q https://raw.githubusercontent.com/xyzstoree/v7/main/update.sh -O /tmp/xyz-update.sh && chmod +x /tmp/xyz-update.sh && /tmp/xyz-update.sh >/var/log/xyz-autoupdate.log 2>&1'
 MODE_FILE="/etc/xyz-ui-mode"
 [ -f "$MODE_FILE" ] && UI_MODE="$(cat "$MODE_FILE")" || UI_MODE="full"
 
