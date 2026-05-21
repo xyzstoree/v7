@@ -1,0 +1,80 @@
+#!/bin/bash
+# Delete akun SSH.
+# FIX:
+#   - Quoting username (cegah shell injection / spaces).
+#   - pkill dulu sebelum userdel supaya sesi aktif tertutup.
+#   - userdel -r untuk hapus home (kalau ada).
+#   - Cleanup /etc/ssh/$user, /etc/kyt/limit/ssh/ip/$user, /var/www/html/ssh-$user.txt.
+#   - Hapus baris di /etc/ssh/.ssh.db.
+GREEN='\e[36m'
+RED='\033[0;31m'
+BGBLUE='\e[1;44m'
+ORANGE='\033[0;33m'
+BLUE='\033[1;36m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BG='\E[44;1;39m'
+NC='\033[0;37m'
+WHITE='\033[0;37m'
+r="\033[1;31m"
+clear
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$NC"
+echo -e "                MEMBER SSH                   "
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$NC"
+echo "USERNAME          EXP DATE          "
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$NC"
+while IFS= read -r expired; do
+    AKUN="$(echo "$expired" | cut -d: -f1)"
+    ID="$(echo "$expired" | grep -v nobody | cut -d: -f3)"
+    [ -z "$AKUN" ] && continue
+    exp="$(chage -l "$AKUN" 2>/dev/null | grep "Account expires" | awk -F": " '{print $2}')"
+    if [[ $ID -ge 1000 ]]; then
+        printf "%-17s %2s %-17s %2s \n" "$AKUN" "$exp     "
+    fi
+done < /etc/passwd
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$NC"
+echo -e "                DELETE SSH                   "
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━$NC"
+echo ""
+read -p "Ketik Usernamenya : " Pengguna
+
+if [ -z "$Pengguna" ]; then
+    echo "Username tidak boleh kosong."
+    read -n 1 -s -r -p "Press any key to back on menu"
+    m-sshws
+    exit 0
+fi
+
+case "$Pengguna" in
+    *[!a-zA-Z0-9_.-]*|''|'.'|'..'|*'/'*)
+        echo "Username tidak valid."
+        read -n 1 -s -r -p "Press any key to back on menu"
+        m-sshws
+        exit 0
+        ;;
+esac
+
+if getent passwd "$Pengguna" > /dev/null 2>&1; then
+    # Tutup sesi aktif dulu, baru hapus user
+    pkill -KILL -u "$Pengguna" >/dev/null 2>&1
+    sleep 1
+    userdel -r "$Pengguna" > /dev/null 2>&1 || userdel -f "$Pengguna" > /dev/null 2>&1
+
+    # Cleanup file pendukung
+    rm -f "/etc/ssh/$Pengguna"
+    rm -f "/etc/kyt/limit/ssh/ip/$Pengguna"
+    rm -f "/var/www/html/ssh-$Pengguna.txt"
+    if [ -f /etc/ssh/.ssh.db ]; then
+        u_esc=$(printf '%s' "$Pengguna" | sed 's/[].\/*^$[]/\\&/g')
+        sed -i -E "/^#ssh# ${u_esc}( |\$)/d" /etc/ssh/.ssh.db
+        # Bersihkan juga entry trial lama yang pakai prefix ###
+        sed -i -E "/^### ${u_esc}( |\$)/d" /etc/ssh/.ssh.db
+    fi
+
+    echo -e "User $Pengguna Berhasil Di Hapus Bossku."
+else
+    echo -e "Failure: User $Pengguna Tidak Di Temukan."
+fi
+echo ""
+read -n 1 -s -r -p "Press any key to back on menu"
+m-sshws

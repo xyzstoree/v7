@@ -1,0 +1,106 @@
+#!/bin/bash
+# Renew (perpanjang) masa aktif akun SSH.
+# FIX: dulu skrip ini RESET exp ke `today + N`, sehingga sisa masa aktif lama hilang.
+# Sekarang dia EXTEND dari exp lama (atau dari hari ini kalau sudah expired).
+# ==========================================
+# Color
+GREEN='\e[36m'
+RED='\033[0;31m'
+BGBLUE='\e[1;44m'
+ORANGE='\033[0;33m'
+BLUE='\033[1;36m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BG='\E[44;1;39m'
+NC='\033[0;37m'
+WHITE='\033[0;37m'
+r="\033[1;31m"  #REDTERANG
+# ==========================================
+clear
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "             ${WHITE}List Member SSH${NC}                  "
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo "USERNAME          EXP DATE          STATUS"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+while IFS= read -r expired
+do
+    AKUN="$(echo "$expired" | cut -d: -f1)"
+    ID="$(echo "$expired" | grep -v nobody | cut -d: -f3)"
+    [ -z "$AKUN" ] && continue
+    exp="$(chage -l "$AKUN" 2>/dev/null | grep "Account expires" | awk -F": " '{print $2}')"
+    status="$(passwd -S "$AKUN" 2>/dev/null | awk '{print $2}')"
+    if [[ $ID -ge 1000 ]]; then
+        if [[ "$status" = "L" ]]; then
+            printf "%-17s %2s %-17s %2s \n" "$AKUN" "$exp     " "LOCKED"
+        else
+            printf "%-17s %2s %-17s %2s \n" "$AKUN" "$exp     " "UNLOCKED"
+        fi
+    fi
+done < /etc/passwd
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "           ${WHITE}Masukan Usernamenya${NC}              "
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+read -p "Username : " User
+
+# FIX: pakai `id -u` (exact match), bukan `egrep "^$User"` yang match prefix.
+if id -u "$User" >/dev/null 2>&1; then
+    read -p "Day Extend : " Days
+    if ! [[ "$Days" =~ ^[1-9][0-9]*$ ]]; then
+        echo -e "${RED}Input hari harus angka positif.${NC}"
+        read -n 1 -s -r -p "Press any key to back ssh menu"
+        m-sshws
+        return 0 2>/dev/null || exit 0
+    fi
+
+    # FIX: ambil exp lama, EXTEND dari sana (bukan reset ke today).
+    cur_exp_str="$(chage -l "$User" 2>/dev/null | awk -F': ' '/Account expires/{print $2}')"
+    Today=$(date +%s)
+    if [ -n "$cur_exp_str" ] && [ "$cur_exp_str" != "never" ]; then
+        cur_exp_sec=$(date -d "$cur_exp_str" +%s 2>/dev/null || echo "$Today")
+    else
+        cur_exp_sec="$Today"
+    fi
+    # Kalau sudah expired, mulai dari hari ini.
+    [ "$cur_exp_sec" -lt "$Today" ] && cur_exp_sec="$Today"
+    Expire_On=$(( cur_exp_sec + Days * 86400 ))
+    Expiration=$(date -u --date="@$Expire_On" +%Y-%m-%d)
+    Expiration_Display=$(date -u --date="@$Expire_On" '+%d %b %Y')
+
+    # Pastikan user tidak terkunci
+    passwd -u "$User" >/dev/null 2>&1
+    usermod -e "$Expiration" "$User" >/dev/null 2>&1
+
+    # Update DB SSH supaya tampilan exp di skrip listing benar
+    if [ -f /etc/ssh/.ssh.db ]; then
+        # Format DB: #ssh# user pass quota iplimit expe
+        u_esc=$(printf '%s' "$User" | sed 's/[].\/*^$[]/\\&/g')
+        new_expe=$(date -d "@$Expire_On" '+%d %b, %Y')
+        sed -i -E "s|^(#ssh# ${u_esc} [^ ]+ [^ ]+ [^ ]+ ).*|\1${new_expe}|" /etc/ssh/.ssh.db
+    fi
+
+    clear
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "        ${WHITE}Perpanjang Masa Aktif SSH${NC}             "
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e ""
+    echo -e " Username   : $User"
+    echo -e " Days Added : $Days Days"
+    echo -e " Expires on : $Expiration_Display"
+    echo -e ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e ""
+    read -n 1 -s -r -p "Press any key to back ssh menu"
+    m-sshws
+else
+    clear
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "        ${WHITE}Perpanjang Masa Aktif SSH${NC}             "
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e ""
+    echo -e "   ${WHITE}Username Tidak Ditemukan${NC}      "
+    echo -e ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e ""
+    read -n 1 -s -r -p "Press any key to back ssh menu"
+    m-sshws
+fi

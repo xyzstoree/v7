@@ -1,0 +1,7 @@
+#!/bin/bash
+# DEPRECATED: gunakan /usr/local/sbin/xyz-disconnect-user.
+# Wrapper ini dipertahankan untuk kompatibilitas dengan skrip lama yang masih
+# memanggil `kill-xray-user`. Implementasi lama (`ps aux | grep $user | kill -9`)
+# berbahaya karena bisa membunuh proses tidak terkait dan tidak efektif untuk
+# akun xray (xray adalah single process, info user ada di config.json bukan di argv).
+exec /usr/local/sbin/xyz-disconnect-user "$@"

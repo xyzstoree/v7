@@ -1,0 +1,89 @@
+#!/bin/bash
+# Delete akun VLESS.
+# FIX:
+#   - Anchor regex sed di end-of-line supaya partial-match user lain tidak ikut terhapus.
+#   - Hapus baris di .vless.db pakai single-line delete (bukan range yang bisa nyangkut ke EOF).
+#   - Force-disconnect pakai xyz-disconnect-user (ss -K), bukan kill-xray-user lama
+#     yang `ps aux | grep $user | kill -9` bisa membunuh proses tidak terkait.
+#   - Guard variabel $user kosong supaya `rm -rf /etc/vless/$user` tidak jadi `rm -rf /etc/vless/`.
+RED='\033[0;31m'
+NC='\033[0m'
+GREEN='\033[0;32m'
+ORANGE='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+LIGHT='\033[0;37m'
+clear
+
+NUMBER_OF_CLIENTS=$(grep -c -E "^//vl " "/etc/xray/config.json")
+if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
+    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo -e "        Delete Vless Account       "
+    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo ""
+    echo "You have no existing clients!"
+    echo ""
+    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    read -n 1 -s -r -p "Press any key to back on menu"
+    menu
+fi
+
+clear
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "        Delete Vless Account       "
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo "  User       Expired  "
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+grep -E "^//vl " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
+echo ""
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+read -rp "Input Username : " user
+
+if [ -z "$user" ]; then
+    menu
+    exit 0
+fi
+
+# Hard guard: refuse to operate on empty/path-like usernames
+case "$user" in
+    *[!a-zA-Z0-9_.-]*|''|'.'|'..'|*'/'*)
+        echo "Username tidak valid."
+        sleep 2
+        menu
+        exit 0
+        ;;
+esac
+
+exp=$(grep -E "^//vl ${user} " /etc/xray/config.json | head -n1 | cut -d ' ' -f 3)
+if [ -z "$exp" ]; then
+    echo "User VLESS '$user' tidak ditemukan."
+    sleep 2
+    menu
+    exit 0
+fi
+
+u_esc=$(printf '%s' "$user" | sed 's/[].\/*^$[]/\\&/g')
+e_esc=$(printf '%s' "$exp"  | sed 's/[].\/*^$[]/\\&/g')
+
+# Hapus 2 baris (komentar marker + entry inbound) dari xray config
+sed -i "/^\/\/vl ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json
+# Hapus single-line dari DB
+sed -i -E "/^### ${u_esc} ${e_esc}( |\$)/d" /etc/vless/.vless.db
+# Cleanup file pendukung
+rm -f "/etc/vless/$user"
+rm -f "/etc/kyt/limit/vless/ip/$user"
+rm -f "/var/www/html/vless-$user.txt"
+
+# Putus paksa koneksi aktif TANPA me-restart xray (user lain tidak terganggu)
+/usr/local/sbin/xyz-disconnect-user "$user" vless >/dev/null 2>&1
+systemctl reload xray > /dev/null 2>&1
+
+clear
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo " Vless Account Deleted Successfully"
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo " Client Name : $user"
+echo " Expired On  : $exp"
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo ""

@@ -1,0 +1,159 @@
+#!/bin/bash
+# Trial SSH + OpenVPN.
+# FIX:
+#   - Pass=1 hardcoded → password random 8 karakter alfanumerik.
+#   - Username random 4 char + cek tabrakan + retry.
+#   - DB prefix #ssh# konsisten (sebelumnya pakai ###, beda dengan addssh).
+#   - At-job pakai cleanup yang benar.
+GREEN='\e[36m'
+RED='\033[0;31m'
+BGBLUE='\e[1;44m'
+ORANGE='\033[0;33m'
+BLUE='\033[1;36m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BG='\E[44;1;39m'
+NC='\033[0;37m'
+WHITE='\033[0;37m'
+r="\033[1;31m"
+# ==========================================
+CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 3)
+KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 2)
+export TIME="10"
+export URL="https://api.telegram.org/bot$KEY/sendMessage"
+domain=$(cat /etc/xray/domain)
+clear
+IP=$(curl -sS ipv4.icanhazip.com)
+
+# Generate username unik (retry kalau bertabrakan dengan user yang sudah ada)
+for _try in 1 2 3 4 5; do
+    Login="Trial-$(</dev/urandom tr -dc A-Za-z0-9 | head -c4)"
+    id -u "$Login" >/dev/null 2>&1 || break
+done
+# Password random (bukan lagi "1")
+Pass="$(</dev/urandom tr -dc A-Za-z0-9 | head -c8)"
+
+clear
+echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "\033[1;96m           Set Durasi Trial              \033[0m"
+echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e " Contoh  : 30m = 30 menit | 2h = 2 jam | 1d = 1 hari"
+read -p " Durasi  : " DURATION_INPUT
+DURATION_INPUT="${DURATION_INPUT:-30m}"
+DUR_NUM="${DURATION_INPUT%[mhd]}"
+DUR_UNIT="${DURATION_INPUT: -1}"
+# Validasi: DUR_NUM harus angka positif
+if ! [[ "$DUR_NUM" =~ ^[1-9][0-9]*$ ]]; then
+    DUR_NUM=30
+    DUR_UNIT="m"
+fi
+case "$DUR_UNIT" in
+    m) DURATION_MIN="$DUR_NUM"; EXPIRE_DISPLAY="${DUR_NUM} Menit" ;;
+    h) DURATION_MIN="$((DUR_NUM * 60))"; EXPIRE_DISPLAY="${DUR_NUM} Jam" ;;
+    d) DURATION_MIN="$((DUR_NUM * 1440))"; EXPIRE_DISPLAY="${DUR_NUM} Hari" ;;
+    *) DURATION_MIN="1440"; EXPIRE_DISPLAY="1 Hari" ;;
+esac
+masaaktif=$(( (DURATION_MIN + 1439) / 1440 ))
+[ "$masaaktif" -lt 1 ] && masaaktif=1
+tgl=$(date -d "$masaaktif days" +"%d")
+bln=$(date -d "$masaaktif days" +"%b")
+thn=$(date -d "$masaaktif days" +"%Y")
+expe="$tgl $bln, $thn"
+tgl2=$(date +"%d")
+bln2=$(date +"%b")
+thn2=$(date +"%Y")
+tnggl="$tgl2 $bln2, $thn2"
+useradd -e "$(date -d "$masaaktif days" +"%Y-%m-%d")" -s /bin/false -M "$Login"
+echo -e "$Pass\n$Pass\n" | passwd "$Login" &> /dev/null
+
+mkdir -p /etc/ssh
+# DB prefix #ssh# konsisten dengan addssh (sebelumnya trial pakai ###).
+if [ -f /etc/ssh/.ssh.db ]; then
+    u_esc=$(printf '%s' "$Login" | sed 's/[].\/*^$[]/\\&/g')
+    sed -i -E "/^#ssh# ${u_esc}( |\$)/d" /etc/ssh/.ssh.db
+fi
+echo "#ssh# ${Login} ${Pass} 0 0 ${expe}" >> /etc/ssh/.ssh.db
+
+cat > /var/www/html/ssh-$Login.txt <<-END
+◇━━━━━━━━━━━━━━━━━◇
+Format SSH OVPN Account
+◇━━━━━━━━━━━━━━━━━◇
+Username         : $Login
+Password         : $Pass
+Berakhir Pada    : $EXPIRE_DISPLAY
+◇━━━━━━━━━━━━━━━━━◇
+IP               : $IP
+Host             : $domain
+Port OpenSSH     : 443, 80, 22
+Port Dropbear    : 443, 109
+Port SSH UDP     : 1-65535
+Port SSH WS      : 80, 8080, 8081-9999
+Port SSH SSL WS  : 443
+Port SSL/TLS     : 400-900
+Port OVPN WS SSL : 443
+Port OVPN SSL    : 443
+Port OVPN TCP    : 1194
+Port OVPN UDP    : 2200
+BadVPN UDP       : 7100, 7300, 7300
+Port 80          : $domain:80@$Login:$Pass
+Port 443         : $domain:443@$Login:$Pass
+Udp Custom       : $domain:1-65535@$Login:$Pass
+◇━━━━━━━━━━━━━━━━━◇
+Payload WSS: GET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]
+◇━━━━━━━━━━━━━━━━━◇
+OVPN Download : https://$domain:81/
+◇━━━━━━━━━━━━━━━━━◇
+END
+
+# Kirim notif Telegram (TEXT didefinisikan SEBELUM curl, tidak seperti versi lama).
+TEXT="
+◇━━━━━━━━━━━━━━━━━━━━━━━◇
+<b>    Succes Trial SSH Ovpn Account</b>
+◇━━━━━━━━━━━━━━━━━━━━━━━◇
+<code>Username    :</code> <code>$Login</code>
+<code>Password    :</code> <code>$Pass</code>
+<code>Host        :</code> <code>$domain</code>
+◇━━━━━━━━━━━━━━━━━━━━━━━◇
+<b>Save Link Account:</b>
+https://$domain:81/ssh-$Login.txt
+◇━━━━━━━━━━━━━━━━━━━━━━━◇
+<code>Berakhir Pada:</code> <b>$EXPIRE_DISPLAY</b>
+◇━━━━━━━━━━━━━━━━━━━━━━━◇
+"
+curl -s --max-time "$TIME" -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" "$URL" >/dev/null
+
+systemctl enable atd >/dev/null 2>&1
+systemctl start atd >/dev/null 2>&1
+# At-job: pkill dulu (kick sesi aktif), userdel, lalu cleanup file.
+echo "pkill -KILL -u ${Login} 2>/dev/null; sleep 2; userdel -f ${Login} 2>/dev/null; sed -i '/^#ssh# ${Login} /d; /^### ${Login} /d' /etc/ssh/.ssh.db; rm -f /etc/ssh/${Login} /etc/kyt/limit/ssh/ip/${Login} /var/www/html/ssh-${Login}.txt" | at now + ${DURATION_MIN} minutes
+
+clear
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"
+echo -e "  Trial SSH & OpenVPN"
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"
+echo -e " Username         : $Login"
+echo -e " Password         : $Pass"
+echo -e " IP/Host          : $IP"
+echo -e " Domain SSH       : $domain"
+echo -e " OpenSSH          : 22"
+echo -e " Dropbear         : 80, 8080"
+echo -e " Port SSH UDP     : 1-65535"
+echo -e " SSL/TLS          : 400-900"
+echo -e " SSH Ws Non SSL   : 80, 8080, 8081-9999"
+echo -e " SSH Ws SSL       : 443"
+echo -e " OVPN Ws Non SSL  : 80"
+echo -e " OVPN Ws SSL      : 443"
+echo -e " BadVPN UDPGW     : 7100,7200,7300"
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━━━━━━◇$NC"
+echo -e "Port 80          : $domain:80@$Login:$Pass \033[0m"
+echo -e "Port 443         : $domain:443@$Login:$Pass \033[0m"
+echo -e "Udp Custom       : $domain:1-65535@$Login:$Pass\033[0m"
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"
+echo -e " OVPN Download : https://$domain:81/"
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"
+echo -e "Save Link Account: https://$domain:81/ssh-$Login.txt"
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"
+echo -e "Berakhir Pada  : $EXPIRE_DISPLAY"
+echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"
+read -n 1 -s -r -p "Press any key to back on menu"
+menu

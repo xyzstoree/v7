@@ -1,0 +1,71 @@
+#!/bin/bash
+# Hapus user SSH yang sudah expired.
+# FIX:
+#   - pkill dulu sebelum userdel.
+#   - userdel -r supaya home dir bersih.
+#   - Cleanup file pendukung (quota, limit IP, www, .ssh.db).
+#   - Quoting username yang benar (sebelumnya `userdel $username` dengan padding spasi rapuh).
+#   - Logging diarahkan ke /var/log/ (sebelumnya nulis ke /usr/local/bin/alluser yang aneh).
+RED='\033[0;31m'
+NC='\033[0m'
+GREEN='\033[0;32m'
+ORANGE='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+LIGHT='\033[0;37m'
+
+LOGDIR="/var/log/xyz"
+mkdir -p "$LOGDIR"
+hariini=$(date +%d-%m-%Y)
+todaystime=$(date +%s)
+
+clear
+echo "Thank you for removing the EXPIRED USERS"
+echo "--------------------------------------"
+
+# Format: user:expiredays(angka, hari sejak epoch). Buang baris tanpa expire date.
+cat /etc/shadow | cut -d: -f1,8 | sed '/:$/d' > /tmp/expirelist.txt
+
+while IFS=: read -r username userexp; do
+    [ -z "$username" ] && continue
+    [[ ! "$userexp" =~ ^[0-9]+$ ]] && continue
+
+    userexpireinseconds=$(( userexp * 86400 ))
+    tglexp_disp=$(date -d "@$userexpireinseconds" "+%d %b %Y" 2>/dev/null || echo "?")
+
+    {
+        printf 'User: %-20s Expire: %s\n' "$username" "$tglexp_disp"
+    } >> "$LOGDIR/alluser.log"
+
+    if [ "$userexpireinseconds" -lt "$todaystime" ]; then
+        # Pastikan UID >= 1000 supaya kita tidak nyentuh user sistem yang kebetulan punya expire date.
+        uid=$(id -u "$username" 2>/dev/null || echo 0)
+        [ "$uid" -lt 1000 ] && continue
+
+        echo "User '$username' expired at $tglexp_disp - removing on $hariini"
+        echo "[$hariini] removed expired user: $username (expire=$tglexp_disp)" >> "$LOGDIR/deleteduser.log"
+
+        pkill -KILL -u "$username" >/dev/null 2>&1
+        sleep 1
+        userdel -r "$username" >/dev/null 2>&1 || userdel -f "$username" >/dev/null 2>&1
+
+        # Cleanup file pendukung SSH
+        rm -f "/etc/ssh/$username"
+        rm -f "/etc/kyt/limit/ssh/ip/$username"
+        rm -f "/var/www/html/ssh-$username.txt"
+        if [ -f /etc/ssh/.ssh.db ]; then
+            u_esc=$(printf '%s' "$username" | sed 's/[].\/*^$[]/\\&/g')
+            sed -i -E "/^#ssh# ${u_esc}( |\$)/d" /etc/ssh/.ssh.db
+            sed -i -E "/^### ${u_esc}( |\$)/d" /etc/ssh/.ssh.db
+        fi
+    fi
+done < /tmp/expirelist.txt
+
+rm -f /tmp/expirelist.txt
+echo " "
+echo "--------------------------------------"
+echo "Script ran successfully."
+echo -e "back to menu in 2 seconds"
+sleep 2
+menu
