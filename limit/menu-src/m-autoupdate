@@ -1,0 +1,63 @@
+#!/bin/bash
+NC='\e[0m'
+GREEN='\033[0;36m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+CRON_FILE="/etc/cron.d/xyz-autoupdate"
+UPDATE_CMD='wget -q https://raw.githubusercontent.com/xyzstores/v7/main/update.sh -O /tmp/xyz-update.sh && chmod +x /tmp/xyz-update.sh && /tmp/xyz-update.sh >/var/log/xyz-autoupdate.log 2>&1'
+MODE_FILE="/etc/xyz-ui-mode"
+[ -f "$MODE_FILE" ] && UI_MODE="$(cat "$MODE_FILE")" || UI_MODE="full"
+
+set_daily() {
+  echo "0 4 * * * root ${UPDATE_CMD}" > "$CRON_FILE"
+  chmod 644 "$CRON_FILE"
+  echo -e "${GREEN}Auto update harian jam 04:00 diaktifkan.${NC}"
+}
+
+set_weekly() {
+  echo "0 4 * * 1 root ${UPDATE_CMD}" > "$CRON_FILE"
+  chmod 644 "$CRON_FILE"
+  echo -e "${GREEN}Auto update mingguan (Senin 04:00) diaktifkan.${NC}"
+}
+
+disable_auto() {
+  rm -f "$CRON_FILE"
+  echo -e "${YELLOW}Auto update dimatikan.${NC}"
+}
+
+show_status() {
+  clear
+  echo -e "\033[0;34m┌──────────────────────────────────────────────┐${NC}"
+  echo -e "\033[0;34m│ \033[41;97m             AUTO UPDATE SCHEDULER          \033[0;34m \033[0;34m│${NC}" 
+  echo -e "\033[0;34m└──────────────────────────────────────────────┘${NC}"
+  echo -e "\033[0;34m┌──────────────────────────────────────────────┐${NC}"
+  if [ -f "$CRON_FILE" ]; then
+    echo -e "\033[0;34m│  ${GREEN}STATUS${NC} : AKTIF"
+    cron_line="$(tr -s ' ' < "$CRON_FILE" | sed -n '1p')"
+    echo -e "\033[0;34m│  ${GREEN}CRON${NC}   : $cron_line"
+  else
+    echo -e "\033[0;34m│  ${RED}STATUS${NC} : NONAKTIF"
+  fi
+  echo -e "\033[0;34m└──────────────────────────────────────────────┘${NC}"
+}
+
+while true; do
+  show_status
+  echo -e "\033[0;34m┌──────────────────────────────────────────────┐${NC}"
+  echo -e "\033[0;34m│  ${GREEN}1.)${NC} Set Daily Auto Update                   \033[0;34m│${NC}"
+  echo -e "\033[0;34m│  ${GREEN}2.)${NC} Set Weekly Auto Update                  \033[0;34m│${NC}"
+  echo -e "\033[0;34m│  ${GREEN}3.)${NC} Disable Auto Update                     \033[0;34m│${NC}"
+  echo -e "\033[0;34m│  ${GREEN}4.)${NC} Show Last Log                           \033[0;34m│${NC}"
+  echo -e "\033[0;34m│  ${GREEN}x.)${NC} Kembali                                 \033[0;34m│${NC}"
+  echo -e "\033[0;34m└──────────────────────────────────────────────┘${NC}"
+  #echo -e "Press [x] Back | UI: ${YELLOW}${UI_MODE}${NC} | Last update: $(date +%F)"
+  read -rp " Select From Options [1-4,x] : " opt
+  case "$opt" in
+    1) set_daily; read -n 1 -s -r -p "Press any key..." ;;
+    2) set_weekly; read -n 1 -s -r -p "Press any key..." ;;
+    3) disable_auto; read -n 1 -s -r -p "Press any key..." ;;
+    4) tail -n 30 /var/log/xyz-autoupdate.log 2>/dev/null || echo "Log belum ada."; read -n 1 -s -r -p "Press any key..." ;;
+    x|X) exit 0 ;;
+  esac
+done
+

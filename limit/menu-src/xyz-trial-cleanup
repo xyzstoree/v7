@@ -1,0 +1,92 @@
+#!/bin/bash
+# xyz-trial-cleanup <proto> <user> <exp>
+#
+# Helper untuk membersihkan akun trial xray ketika expired.
+# Dipanggil dari `at`-job. Kelebihan vs inline-sed di at-job:
+#   - Tidak perlu escape neraka (4 level: bash → at spool → sh → sed).
+#   - Logika cleanup terpusat dan bisa di-test/diaudit.
+#   - Konsisten antar protocol (vless / trojan / vmess / ss).
+#
+# Aksi:
+#   1. Hapus baris //{vl|tr|vm|ss} dari /etc/xray/config.json (anchored).
+#   2. Hapus baris ### dari DB (/etc/{vless,trojan,vmess,shadowsocks}/.X.db).
+#   3. Hapus file pendukung (limit IP, quota, html).
+#   4. Force-disconnect socket aktif via xyz-disconnect-user (ss -K).
+#   5. systemctl reload xray.
+
+proto="$1"
+user="$2"
+exp="$3"
+
+[ -z "$proto" ] || [ -z "$user" ] || [ -z "$exp" ] && exit 1
+
+# Tolak username dengan karakter aneh.
+case "$user" in
+    *[!a-zA-Z0-9_.-]*) exit 1 ;;
+esac
+
+# Escape karakter regex-spesial untuk sed.
+u_esc=$(printf '%s' "$user" | sed 's/[].\/*^$[]/\\&/g')
+e_esc=$(printf '%s' "$exp"  | sed 's/[].\/*^$[]/\\&/g')
+
+case "$proto" in
+    vless)
+        marker="//vl"
+        db="/etc/vless/.vless.db"
+        limitdir="/etc/kyt/limit/vless/ip"
+        quotadir="/etc/vless"
+        html="/var/www/html/vless-${user}.txt"
+        ;;
+    trojan)
+        marker="//tr"
+        db="/etc/trojan/.trojan.db"
+        limitdir="/etc/kyt/limit/trojan/ip"
+        quotadir="/etc/trojan"
+        html="/var/www/html/trojan-${user}.txt"
+        ;;
+    vmess)
+        marker="//vm"
+        db="/etc/vmess/.vmess.db"
+        limitdir="/etc/kyt/limit/vmess/ip"
+        quotadir="/etc/vmess"
+        html="/var/www/html/vmess-${user}.txt"
+        ;;
+    ss)
+        marker="//ss"
+        db="/etc/shadowsocks/.shadowsocks.db"
+        limitdir=""
+        quotadir="/etc/shadowsocks"
+        html=""
+        ;;
+    *)
+        exit 1
+        ;;
+esac
+
+# Escape garis miring di marker untuk sed.
+m_esc=$(printf '%s' "$marker" | sed 's|/|\\/|g')
+
+# 1. Hapus dari config.json (range marker → next "},{")
+sed -i "/^${m_esc} ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json 2>/dev/null
+
+# 2. Hapus dari DB (single-line, anchored)
+[ -f "$db" ] && sed -i -E "/^### ${u_esc} ${e_esc}( |\$)/d" "$db"
+
+# 3. Cleanup file pendukung
+[ -n "$limitdir" ] && rm -f "${limitdir}/${user}"
+[ -n "$quotadir" ] && rm -f "${quotadir}/${user}"
+[ -n "$html" ] && rm -f "$html"
+
+# Untuk SS: ada 2 file html (ws + grpc)
+if [ "$proto" = "ss" ]; then
+    rm -f "/var/www/html/sodosokws-${user}.txt" \
+          "/var/www/html/sodosokgrpc-${user}.txt"
+fi
+
+# 4. Putus paksa socket aktif (target IP user, tidak ganggu user lain)
+/usr/local/sbin/xyz-disconnect-user "$user" "$proto" >/dev/null 2>&1
+
+# 5. Reload xray (refresh user table)
+systemctl reload xray >/dev/null 2>&1
+
+exit 0

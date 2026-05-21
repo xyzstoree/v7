@@ -1,0 +1,118 @@
+#!/bin/bash
+# Renew akun VLESS.
+# FIX:
+#   - Kalau akun sudah expired, exp2 sebelumnya bisa negatif → akun "renewed" tetap expired.
+#     Sekarang clamp exp2 minimum 0.
+#   - Path DB sebelumnya salah (/root/akun/vless/.vless.conf), seharusnya /etc/vless/.vless.db.
+#   - Sed pattern di-anchor end-of-line + exp supaya partial-match (user `tes` vs `testing`)
+#     tidak ikut ter-overwrite.
+#   - Limit IP sekarang ditulis pakai `>` (bukan `>>`) dan dilewati kalau iplim kosong/0.
+#   - Quota & iplim divalidasi numerik.
+red='\e[1;31m'
+green='\e[0;36m'
+NC='\e[0m'
+green() { echo -e "\\033[32;1m${*}\\033[0m"; }
+red() { echo -e "\\033[31;1m${*}\\033[0m"; }
+clear
+
+NUMBER_OF_CLIENTS=$(grep -c -E "^//vl " "/etc/xray/config.json")
+if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
+    clear
+    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo -e "            Renew Vless          \E[0m"
+    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo ""
+    echo "You have no existing clients!"
+    echo ""
+    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+    echo ""
+    read -n 1 -s -r -p "Press any key to back on menu"
+    menu
+fi
+
+clear
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo -e "            Renew Vless         \E[0m"
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo ""
+grep -E "^//vl " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
+echo ""
+red "tap enter to go back"
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+read -rp "Input Username : " user
+if [ -z "$user" ]; then
+    menu
+    exit 0
+fi
+
+read -p "Expired (days): " masaaktif
+read -p "Limit User (GB): " Quota
+read -p "Limit User (IP): " iplim
+
+# Validasi numerik (tolak input non-angka, hindari `[[ "" -gt 0 ]]` / `$((* * 1024))`)
+[[ "$masaaktif" =~ ^[1-9][0-9]*$ ]] || { red "Masa aktif harus angka positif."; sleep 2; menu; exit 0; }
+[[ "$Quota"     =~ ^[0-9]+$        ]] || Quota=0
+[[ "$iplim"     =~ ^[0-9]+$        ]] || iplim=0
+
+# Ambil exp lama dengan grep ANCHORED + cek kosong
+exp=$(grep -E "^//vl ${user} " /etc/xray/config.json | head -n1 | cut -d ' ' -f 3)
+if [ -z "$exp" ]; then
+    red "User VLESS '$user' tidak ditemukan."
+    sleep 2
+    menu
+    exit 0
+fi
+
+mkdir -p /etc/kyt/limit/vless/ip /etc/vless
+
+# FIX BUG #4 di analisis: jangan pakai `>>` ke file yang sudah dihapus, pakai `>`.
+if [[ $iplim -gt 0 ]]; then
+    echo "$iplim" > /etc/kyt/limit/vless/ip/${user}
+else
+    rm -f /etc/kyt/limit/vless/ip/${user}
+fi
+
+# Quota → bytes
+c=$(echo "${Quota}" | sed 's/[^0-9]*//g')
+[ -z "$c" ] && c=0
+d=$(( c * 1024 * 1024 * 1024 ))
+if [[ ${c} != "0" ]]; then
+    echo "${d}" > /etc/vless/${user}
+else
+    rm -f /etc/vless/${user}
+fi
+
+# Hitung exp baru (FIX BUG #3: clamp exp2 minimum 0)
+now=$(date +%s)
+old_sec=$(date -d "$exp" +%s 2>/dev/null || echo "$now")
+exp2=$(( (old_sec - now) / 86400 ))
+[ "$exp2" -lt 0 ] && exp2=0
+exp_total=$(( exp2 + masaaktif ))
+exp4=$(date -d "$exp_total days" +"%Y-%m-%d")
+
+# FIX BUG #6: anchor regex supaya partial-match user lain tidak kena
+u_esc=$(printf '%s' "$user" | sed 's/[].\/*^$[]/\\&/g')
+e_esc=$(printf '%s' "$exp"  | sed 's/[].\/*^$[]/\\&/g')
+
+sed -i "/^\/\/vl ${u_esc} ${e_esc}\$/c\\//vl $user $exp4" /etc/xray/config.json
+
+# FIX BUG #14: update DB di path yang BENAR (.vless.db, bukan /root/akun/vless/.vless.conf)
+if [ -f /etc/vless/.vless.db ]; then
+    sed -i -E "s|^### ${u_esc} ${e_esc} ([^ ]+) [^ ]+ [^ ]+\$|### $user $exp4 \\1 ${Quota} ${iplim}|" /etc/vless/.vless.db
+fi
+
+systemctl reload xray > /dev/null 2>&1
+clear
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo " VLESS Account Was Successfully Renewed"
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo ""
+echo " Client Name   : $user"
+echo " Expired On    : $exp4"
+echo " User Quota    : $Quota GB"
+echo " User Limit IP : $iplim"
+echo ""
+echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
+echo ""
+read -n 1 -s -r -p "Press any key to back on menu"
+menu

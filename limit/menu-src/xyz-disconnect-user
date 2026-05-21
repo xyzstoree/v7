@@ -1,0 +1,61 @@
+#!/bin/bash
+# xyz-disconnect-user <user> [protocol]
+#
+# Memutus paksa socket TCP aktif untuk akun yang dihapus / di-lock / expired,
+# TANPA me-restart xray (sehingga user lain tidak ikut disconnect).
+#
+# Cara kerja:
+#   - Baca daftar IP yang sedang dipakai user dari /etc/kyt/limit/<protocol>/ip/<user>
+#   - `ss -K dst <ip>` untuk menendang socket per IP (kernel >= 4.9)
+#   - Untuk user OS (SSH): pkill -KILL -u <user>
+#
+# Aman untuk dipanggil dari:
+#   - delssh / delvless / deltr / delws / delss
+#   - at-job trial expiry
+#   - lock_* di m-vless / m-trojan / m-vmess
+
+user="$1"
+proto="$2"
+
+[ -z "$user" ] && exit 0
+
+# Sanitasi: tolak username dengan karakter aneh untuk hindari shell-injection.
+case "$user" in
+    *[!a-zA-Z0-9_.-]*) exit 0 ;;
+esac
+
+iplist_paths=()
+if [ -n "$proto" ]; then
+    iplist_paths+=("/etc/kyt/limit/${proto}/ip/${user}")
+else
+    for p in vless vmess trojan ss ssh; do
+        [ -f "/etc/kyt/limit/${p}/ip/${user}" ] && \
+            iplist_paths+=("/etc/kyt/limit/${p}/ip/${user}")
+    done
+fi
+
+for f in "${iplist_paths[@]}"; do
+    [ -f "$f" ] || continue
+    while IFS= read -r ip; do
+        # Buang spasi, lewati baris kosong / non-IP-looking
+        ip="$(printf '%s' "$ip" | tr -d '[:space:]')"
+        [ -z "$ip" ] && continue
+        case "$ip" in
+            *[!0-9.:a-fA-F]*) continue ;;
+        esac
+        # Skip kalau angka murni (mis. file ini berisi limit-count "3" bukan IP)
+        case "$ip" in
+            *.*|*:*) ;;
+            *) continue ;;
+        esac
+        ss -K dst "$ip" >/dev/null 2>&1
+    done < "$f"
+done
+
+# Untuk SSH OS user: pkill adalah cara yang benar.
+# Akun xray (vless/vmess/trojan/ss) tidak punya UID Linux sehingga `id -u` akan gagal di sini.
+if id -u "$user" >/dev/null 2>&1; then
+    pkill -KILL -u "$user" >/dev/null 2>&1 || true
+fi
+
+exit 0

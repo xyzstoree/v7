@@ -1,0 +1,216 @@
+#!/bin/bash
+
+# ===================== WARNA =====================
+GREEN='\033[0;34m'
+RED='\033[0;31m'
+ORANGE='\033[0;33m'
+BLUE='\033[1;36m'
+YELLOW='\033[1;33m'
+BOLD_RED='\033[1;31m'
+BOLD_WHITE='\033[1;97m'
+NC='\033[0m'
+WHITE='\033[0;37m'
+CYAN='\e[0;33m'
+
+# ===================== AMBIL DATA =====================
+MODE_FILE="/etc/xyz-ui-mode"
+[ -f "$MODE_FILE" ] && UI_MODE="$(cat "$MODE_FILE")" || UI_MODE="full"
+
+responden=$(curl -m 5 -s "http://ip-api.com/json/?fields=country,region,city,timezone,isp,query")
+ISP=$(echo "$responden" | jq -r '.isp')
+CITY=$(echo "$responden" | jq -r '.city')
+IPVPS=$(echo "$responden" | jq -r '.query')
+[ -z "$IPVPS" ] || [ "$IPVPS" = "null" ] && IPVPS=$(curl -m 5 -s ipv4.icanhazip.com)
+
+domain=$(cat /etc/xray/domain)
+
+if [ "$UI_MODE" = "compact" ]; then
+  ISP=$(echo "$ISP" | cut -c1-24)
+  domain=$(echo "$domain" | cut -c1-24)
+fi
+
+RAM=$(free -m | awk 'NR==2 {print $2}')
+SWAP=$(free -m | awk 'NR==3 {print $2}')
+MODEL=$(grep -w PRETTY_NAME /etc/os-release | head -n1 | sed 's/=//g;s/"//g;s/PRETTY_NAME//g')
+SERONLINE=$(uptime -p | cut -d " " -f 2-10000)
+
+MYIP="$IPVPS"
+[ -z "$MYIP" ] || [ "$MYIP" = "null" ] && MYIP=$(curl -m 5 -sS ipv4.icanhazip.com | tr -d '\r\n')
+
+# ===================== CEK IZIN =====================
+cached_username=$(cat /usr/bin/user 2>/dev/null)
+cached_valid=$(cat /usr/bin/e 2>/dev/null)
+
+izin_data=$(curl -m 8 -sS https://raw.githubusercontent.com/xyzstoree/izin/main/ip)
+username=$(echo "$izin_data" | awk -v ip="$MYIP" '$1==ip {print $2; exit}' | tr -d '\r\n')
+[ -z "$username" ] && username="$cached_username"
+echo "$username" > /usr/bin/user
+
+today=$(date -d "0 days" +"%Y-%m-%d")
+valid=$(echo "$izin_data" | awk -v ip="$MYIP" '$1==ip {print $3; exit}' | tr -d '\r\n')
+[ -z "$valid" ] && valid="$cached_valid"
+echo "$valid" > /usr/bin/e
+
+username=$(cat /usr/bin/user)
+exp=$(cat /usr/bin/e)
+
+if [[ "$valid" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  d1=$(date -d "$valid" +%s 2>/dev/null)
+else
+  d1=""
+fi
+
+d2=$(date -d "$today" +%s)
+
+if [[ -n "$d1" ]]; then
+  certifacate=$(((d1 - d2) / 86400))
+else
+  certifacate=30
+fi
+
+DATE=$(date +'%Y-%m-%d')
+
+if [[ -n "$d1" && "$certifacate" -le "0" ]]; then
+  clear
+  echo -e " ${RED}Masa Aktif Script Kamu Sudah Habis${NC}"
+  echo -e " ${RED}Silahkan Contact Admin Untuk Perpanjang${NC}"
+  echo -e " ${GREEN}Whatsapp : wa.me/6285960592386${NC}"
+  echo -e " ${GREEN}Telegram : @xyztunnn${NC}"
+  sleep 3
+  exit 1
+fi
+
+# ===================== STATUS SERVICE =====================
+ssh_service=$(systemctl is-active ssh 2>/dev/null)
+dropbear_service=$(systemctl is-active dropbear 2>/dev/null)
+haproxy_service=$(systemctl is-active haproxy 2>/dev/null)
+xray_service=$(systemctl is-active xray 2>/dev/null)
+nginx_service=$(systemctl is-active nginx 2>/dev/null)
+ssh_ws=$(systemctl is-active ws 2>/dev/null)
+
+[[ "$ssh_ws" == "active" ]]      && status_ws_txt="ON"  || status_ws_txt="ER"
+[[ "$haproxy_service" == "active" ]] && status_haproxy_txt="ON" || status_haproxy_txt="ER"
+[[ "$xray_service" == "active" ]]    && status_xray_txt="ON"  || status_xray_txt="ER"
+
+[[ "$status_ws_txt" == "ON" ]]      && status_ws_epro="${GREEN}ON${NC}" || status_ws_epro="${RED}ER${NC}"
+[[ "$status_haproxy_txt" == "ON" ]] && status_haproxy="${GREEN}ON${NC}" || status_haproxy="${RED}ER${NC}"
+[[ "$status_xray_txt" == "ON" ]]    && status_xray="${GREEN}ON${NC}"    || status_xray="${RED}ER${NC}"
+
+if [ "$status_xray_txt" = "ON" ] && [ "$status_ws_txt" = "ON" ] && [ "$status_haproxy_txt" = "ON" ]; then
+  system_health="${GREEN}GOOD${NC}"
+else
+  system_health="${RED}ERROR${NC}"
+fi
+
+# ===================== HITUNG AKUN =====================
+vlx=$(grep -c -E "^#& " "/etc/xray/config.json" 2>/dev/null); vla=$((vlx/2))
+vmc=$(grep -c -E "^### " "/etc/xray/config.json" 2>/dev/null); vma=$((vmc/2))
+trx=$(grep -c -E "^#! " "/etc/xray/config.json" 2>/dev/null);  trb=$((trx/2))
+ssh1=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)
+XRAY_VERSION=$(xray version 2>/dev/null | head -n 1 | awk '{print $2}')
+
+# ===================== VNSTAT =====================
+VN_IFACE=$(ip -o -4 route show to default 2>/dev/null | awk '{print $5; exit}')
+if ! vnstat -i "$VN_IFACE" >/dev/null 2>&1; then
+  VN_IFACE=$(vnstat --iflist 2>/dev/null | awk -F'[:( ]+' '/available interfaces/ {print $3; exit}')
+fi
+[ -z "$VN_IFACE" ] && VN_IFACE="eth0"
+
+vnstat_m_out=$(vnstat -m -i "$VN_IFACE" 2>/dev/null)
+vnstat_d_out=$(vnstat -d -i "$VN_IFACE" 2>/dev/null)
+
+month_row=$(printf "%s\n" "$vnstat_m_out" | grep -E -m1 '^[[:space:]]*[0-9]{4}-[0-9]{2}[[:space:]]')
+if [ -n "$month_row" ]; then
+  set -- $month_row
+  month_line="$1"; month_rx="$2 $3"; month_tx="$5 $6"; month_total="$8 $9"
+fi
+
+day_row=$(printf "%s\n" "$vnstat_d_out" | grep -E -m1 '^[[:space:]]*[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]')
+if [ -n "$day_row" ]; then
+  set -- $day_row
+  day_line="$1"; day_rx="$2 $3"; day_tx="$5 $6"; day_total="$8 $9"
+fi
+
+[ -z "$month_total" ] && month_total="N/A"
+[ -z "$month_rx" ]    && month_rx="N/A"
+[ -z "$month_tx" ]    && month_tx="N/A"
+[ -z "$day_total" ]   && day_total="N/A"
+[ -z "$day_rx" ]      && day_rx="N/A"
+[ -z "$day_tx" ]      && day_tx="N/A"
+
+month_name=$(date -d "${month_line}-01" +%B 2>/dev/null); [ -z "$month_name" ] && month_name="$month_line"
+day_name=$(date -d "${day_line}" +%A 2>/dev/null);        [ -z "$day_name" ] && day_name="$day_line"
+month_show="$month_total [$month_name]"
+day_show="$day_total [$day_name]"
+
+vn_tr_raw=$(vnstat -tr 2 -i "$VN_IFACE" 2>/dev/null)
+[ -z "$vn_tr_raw" ] && vn_tr_raw=$(vnstat -tr 5 -i "$VN_IFACE" 2>/dev/null)
+day_trf=$(printf "%s\n" "$vn_tr_raw" | awk '/traffic/ {for(i=1;i<=NF;i++) if($i ~ /bit\/s$/){print $(i-1)" "$i; exit}}')
+[ -z "$day_trf" ] && day_trf="N/A"
+
+# ===================== GARIS DEKORASI =====================
+garis() {
+  local bar=""
+  for i in {52..57} {57..52}; do
+    bar+="\e[38;5;${i}m---\e[0m"
+  done
+  echo -e "  ${bar}"
+}
+
+laneBlue() {
+  local bar=""
+  for i in {52..57}; do bar+="\e[38;5;${i}m----\e[0m"; done
+  for i in {56..52}; do bar+="\e[38;5;${i}m----\e[0m"; done
+  bar+="\e[38;5;52m--\e[0m"
+  echo -e " $bar"
+}
+
+# ===================== TAMPILAN =====================
+clear
+echo -e "${GREEN}┌──────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}│ \033[41;97m                XYZ STORE               ${NC} ${GREEN}│${NC}"
+echo -e "${GREEN}└──────────────────────────────────────────────┘${NC}"
+echo -e "${GREEN}┌──────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}│ ${WHITE}OS      ${NC}: $MODEL"
+echo -e "${GREEN}│ ${WHITE}RAM     ${NC}: ${RAM}MB"
+echo -e "${GREEN}│ ${WHITE}SWAP    ${NC}: ${SWAP}MB"
+echo -e "${GREEN}│ ${WHITE}CITY    ${NC}: $CITY"
+echo -e "${GREEN}│ ${WHITE}ISP     ${NC}: $ISP"
+echo -e "${GREEN}│ ${WHITE}IP      ${NC}: ${BOLD_RED}$IPVPS${NC}"
+echo -e "${GREEN}│ ${WHITE}DOMAIN  ${NC}: $domain"
+echo -e "${GREEN}│ ${WHITE}UPTIME  ${NC}: $SERONLINE"
+echo -e "${GREEN}│$(garis)"
+echo -e "${GREEN}│ ${WHITE}MONTH   ${NC}: $month_show"
+echo -e "${GREEN}│ ${WHITE}RX      ${NC}: $month_rx"
+echo -e "${GREEN}│ ${WHITE}TX      ${NC}: $month_tx"
+echo -e "${GREEN}│$(garis)"
+echo -e "${GREEN}│ ${WHITE}DAY     ${NC}: $day_show"
+echo -e "${GREEN}│ ${WHITE}RX      ${NC}: $day_rx"
+echo -e "${GREEN}│ ${WHITE}TX      ${NC}: $day_tx"
+echo -e "${GREEN}│ ${WHITE}TRAFFIC ${NC}: $day_trf"
+echo -e "${GREEN}└──────────────────────────────────────────────┘${NC}"
+echo -e "${GREEN}┌──────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}│ ${WHITE}XRAY${NC}: $status_xray ${WHITE}| SSH-WS${NC}: $status_ws_epro ${WHITE}| HAPROXY${NC}: $status_haproxy ${WHITE}| ${NC}$system_health"
+echo -e "${GREEN}└──────────────────────────────────────────────┘${NC}"
+echo -e "${GREEN}   ┌────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}   │ ${WHITE}Version     ${NC}: SPv${XRAY_VERSION}"
+echo -e "${GREEN}   │ ${WHITE}Order By    ${NC}: ${CYAN}XYZ STORE${NC}"
+echo -e "${GREEN}   │ ${WHITE}Client Name ${NC}: ${BOLD_RED}${username}${NC}"
+echo -e "${GREEN}   │ ${WHITE}Expiry In   ${NC}: ${BOLD_RED}${certifacate} Days${NC}"
+echo -e "${GREEN}   └────────────────────────────────────────┘${NC}"
+echo -e "${GREEN}   ┌────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}   │        ${WHITE}LIST ACCOUNTS${NC}"
+echo -e "${GREEN}   │ ${WHITE}SSH/OPENVPN ${NC}: ${ssh1} Account"
+echo -e "${GREEN}   │ ${WHITE}VMESS       ${NC}: ${vma} Account"
+echo -e "${GREEN}   │ ${WHITE}VLESS       ${NC}: ${vla} Account"
+echo -e "${GREEN}   │ ${WHITE}TROJAN      ${NC}: ${trb} Account"
+echo -e "${GREEN}   └────────────────────────────────────────┘${NC}"
+echo -e "$(laneBlue)"
+echo -e ""
+echo -e "${GREEN}┌──────────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}│  ${YELLOW}[ ${WHITE}Tekan ${BOLD_RED}Enter${WHITE} Untuk Masuk Menu Utama ${YELLOW}]  ${GREEN}│${NC}"
+echo -e "${GREEN}└──────────────────────────────────────────────┘${NC}"
+echo -e ""
+read -n 1 -s -r -p ""
+echo ""
+menu
