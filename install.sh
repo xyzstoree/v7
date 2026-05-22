@@ -779,6 +779,13 @@ systemctl enable --now haproxy
 systemctl enable --now netfilter-persistent
 systemctl enable --now ws
 systemctl enable --now fail2ban
+# Enable runn.service: oneshot setelah xray, panggil xyz-xray-tag-migrate
+# (idempoten, no-op kalau tag sudah ada di config) + xyz-xray-sync
+# (re-import user aktif dari .db setiap kali xray (re)start). Tanpa enable
+# eksplisit, file unit yang sudah di-download di install_xray() tidak
+# pernah aktif di boot.
+systemctl enable runn.service >/dev/null 2>&1
+systemctl start runn.service  >/dev/null 2>&1
 history -c
 echo "unset HISTFILE" >> /etc/profile
 cd
@@ -888,6 +895,18 @@ EOF
     else
         TIME_DATE="AM"
     fi
+
+# Defense in depth untuk fresh install:
+#  1. Tag-migrate: idempoten — no-op kalau config.json fresh dari repo
+#     sudah punya "tag" (kasus normal). Hanya berdampak kalau install.sh
+#     dipanggil ulang di server existing yg config-nya pre-tag.
+#  2. xyz-xray-sync: untuk fresh install, .db files masih kosong jadi
+#     no-op. Tapi jadi safety kalau user re-run installer setelah punya
+#     beberapa akun (rare path). Jalan async supaya tidak block install.
+[ -x /usr/local/sbin/xyz-xray-tag-migrate ] && \
+    /usr/local/sbin/xyz-xray-tag-migrate /etc/xray/config.json >/dev/null 2>&1
+( sleep 5 ; [ -x /usr/local/sbin/xyz-xray-sync ] && \
+    /usr/local/sbin/xyz-xray-sync >/dev/null 2>&1 ) &
 print_success "Menu Packet"
 }
 function enable_services(){
