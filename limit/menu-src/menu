@@ -139,15 +139,22 @@ status_dropbear="${GREEN}ON ${NC}"
 else
 status_dropbear="${RED}🔴${NC} "
 fi
-vlx=$(grep -c -E "^#& " "/etc/xray/config.json")
-let vla=$vlx/2
-vmc=$(grep -c -E "^### " "/etc/xray/config.json")
-let vma=$vmc/2
-ssh1="$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)"
-trx=$(grep -c -E "^#! " "/etc/xray/config.json")
-let trb=$trx/2
-ssx=$(grep -c -E "^#ss# " "/etc/xray/config.json")
-let ssa=$ssx/2
+# Counter akun: gunakan prefix marker yang benar-benar ditulis oleh add*
+# scripts ke /etc/xray/config.json (//vl /vm /tr /ss). Versi lama grep
+# prefix yang TIDAK PERNAH ada di config (#& ### #! #ss#) sehingga counter
+# selalu 0. Setiap akun ditulis 2x (ws inbound + grpc inbound) → /2.
+vlx=$(grep -c -E "^//vl " "/etc/xray/config.json" 2>/dev/null); let vla=$vlx/2
+vmc=$(grep -c -E "^//vm " "/etc/xray/config.json" 2>/dev/null); let vma=$vmc/2
+trx=$(grep -c -E "^//tr " "/etc/xray/config.json" 2>/dev/null); let trb=$trx/2
+ssx=$(grep -c -E "^//ss " "/etc/xray/config.json" 2>/dev/null); let ssa=$ssx/2
+# SSH count: prefer DB (presisi, hanya akun yang dibuat lewat addssh/trial).
+# Fallback ke awk /etc/passwd untuk backward-compat (over-count kalau ada
+# admin user manual, tapi lebih akurat dari nol).
+if [ -f /etc/ssh/.ssh.db ]; then
+    ssh1=$(grep -cE "^#ssh# " /etc/ssh/.ssh.db 2>/dev/null)
+else
+    ssh1=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)
+fi
 r="\033[1;31m"  #REDTERANG
 DROPBEAR_VERSION=$(dropbear -V 2>&1 | grep -oE 'v[0-9.]+')
 XRAY_VERSION=$(xray version 2>/dev/null | head -n 1 | awk '{print $2}')

@@ -103,10 +103,19 @@ else
 fi
 
 # ===================== HITUNG AKUN =====================
-vlx=$(grep -c -E "^#& " "/etc/xray/config.json" 2>/dev/null); vla=$((vlx/2))
-vmc=$(grep -c -E "^### " "/etc/xray/config.json" 2>/dev/null); vma=$((vmc/2))
-trx=$(grep -c -E "^#! " "/etc/xray/config.json" 2>/dev/null);  trb=$((trx/2))
-ssh1=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)
+# Counter pakai prefix //vl /vm /tr /ss yang ditulis add* ke config.json.
+# Versi lama pakai #& ### #! yang tidak pernah ada → counter selalu 0.
+# Setiap akun = 2 baris marker (inbound ws + inbound grpc) → /2.
+vlx=$(grep -c -E "^//vl " "/etc/xray/config.json" 2>/dev/null); vla=$((vlx/2))
+vmc=$(grep -c -E "^//vm " "/etc/xray/config.json" 2>/dev/null); vma=$((vmc/2))
+trx=$(grep -c -E "^//tr " "/etc/xray/config.json" 2>/dev/null); trb=$((trx/2))
+ssx=$(grep -c -E "^//ss " "/etc/xray/config.json" 2>/dev/null); ssa=$((ssx/2))
+# SSH: utamakan DB (presisi); fallback awk /etc/passwd.
+if [ -f /etc/ssh/.ssh.db ]; then
+    ssh1=$(grep -cE "^#ssh# " /etc/ssh/.ssh.db 2>/dev/null)
+else
+    ssh1=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)
+fi
 XRAY_VERSION=$(xray version 2>/dev/null | head -n 1 | awk '{print $2}')
 
 # ===================== VNSTAT =====================
