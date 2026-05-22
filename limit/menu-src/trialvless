@@ -96,7 +96,7 @@ TIME="$TIME"
 URL="$URL"
 TEXT="
 ◇━━━━━━━━━━━━━━━━━━━━━━━◇
-<b>     XRAY/VMESS SUCCES </b>
+<b>     XRAY/VLESS SUCCES </b>
 ◇━━━━━━━━━━━━━━━━━━━━━━━◇
 <code>Remarks   : ${user}
 Domain    : ${domain}
@@ -132,7 +132,6 @@ https://${domain}:81/vless-$user.txt
 curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
 
 cat >/var/www/html/vless-$user.txt <<-END
-clear
 
 ◇━━━━━━━━━━━━━━━━━◇
   ZN TUNNELING
@@ -185,7 +184,7 @@ clear
   servername: ${domain}
   network: grpc
   grpc-opts:
-  grpc-mode: gun
+    grpc-mode: gun
     grpc-service-name: vless-grpc
 
 ◇━━━━━━━━━━━━━━━━━◇

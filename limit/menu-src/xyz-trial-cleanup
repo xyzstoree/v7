@@ -30,8 +30,18 @@ u_esc=$(printf '%s' "$user" | sed 's/[].\/*^$[]/\\&/g')
 e_esc=$(printf '%s' "$exp"  | sed 's/[].\/*^$[]/\\&/g')
 
 case "$proto" in
+    ssh)
+        # SSH unik: tidak ada entry di config.json (akun OS), DB beda prefix.
+        marker=""
+        db="/etc/ssh/.ssh.db"
+        db_prefix="#ssh#"
+        limitdir="/etc/kyt/limit/ssh/ip"
+        quotadir="/etc/ssh"
+        html="/var/www/html/ssh-${user}.txt"
+        ;;
     vless)
         marker="//vl"
+        db_prefix="###"
         db="/etc/vless/.vless.db"
         limitdir="/etc/kyt/limit/vless/ip"
         quotadir="/etc/vless"
@@ -39,6 +49,7 @@ case "$proto" in
         ;;
     trojan)
         marker="//tr"
+        db_prefix="###"
         db="/etc/trojan/.trojan.db"
         limitdir="/etc/kyt/limit/trojan/ip"
         quotadir="/etc/trojan"
@@ -46,6 +57,7 @@ case "$proto" in
         ;;
     vmess)
         marker="//vm"
+        db_prefix="###"
         db="/etc/vmess/.vmess.db"
         limitdir="/etc/kyt/limit/vmess/ip"
         quotadir="/etc/vmess"
@@ -53,6 +65,7 @@ case "$proto" in
         ;;
     ss)
         marker="//ss"
+        db_prefix="###"
         db="/etc/shadowsocks/.shadowsocks.db"
         limitdir=""
         quotadir="/etc/shadowsocks"
@@ -67,15 +80,32 @@ esac
 m_esc=$(printf '%s' "$marker" | sed 's|/|\\/|g')
 
 # 1. Hapus dari config.json (range marker → next "},{")
-sed -i "/^${m_esc} ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json 2>/dev/null
+#    Skip untuk SSH (tidak punya entry di xray config).
+if [ -n "$marker" ]; then
+    sed -i "/^${m_esc} ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json 2>/dev/null
+fi
 
-# 2. Hapus dari DB (single-line, anchored)
-[ -f "$db" ] && sed -i -E "/^### ${u_esc} ${e_esc}( |\$)/d" "$db"
+# 2. Hapus dari DB (single-line, anchored). Untuk SSH, exp di DB adalah
+#    string display ("DD Mmm, YYYY") bukan ISO date — anchor cukup ke username.
+if [ -f "$db" ]; then
+    if [ "$proto" = "ssh" ]; then
+        sed -i -E "/^${db_prefix} ${u_esc}( |\$)/d" "$db"
+    else
+        sed -i -E "/^${db_prefix} ${u_esc} ${e_esc}( |\$)/d" "$db"
+    fi
+fi
 
 # 3. Cleanup file pendukung
 [ -n "$limitdir" ] && rm -f "${limitdir}/${user}"
 [ -n "$quotadir" ] && rm -f "${quotadir}/${user}"
 [ -n "$html" ] && rm -f "$html"
+
+# 4. SSH-specific: kick session aktif + hapus user OS.
+if [ "$proto" = "ssh" ]; then
+    pkill -KILL -u "$user" 2>/dev/null
+    sleep 1
+    userdel -f "$user" 2>/dev/null
+fi
 
 # Untuk SS: ada 2 file html (ws + grpc)
 if [ "$proto" = "ss" ]; then
@@ -83,10 +113,14 @@ if [ "$proto" = "ss" ]; then
           "/var/www/html/sodosokgrpc-${user}.txt"
 fi
 
-# 4. Putus paksa socket aktif (target IP user, tidak ganggu user lain)
+# 5. Putus paksa socket aktif (target IP user, tidak ganggu user lain).
+#    Untuk SSH: pkill di atas sudah memutus, tapi xyz-disconnect-user juga
+#    aman dijalankan (idempoten).
 /usr/local/sbin/xyz-disconnect-user "$user" "$proto" >/dev/null 2>&1
 
-# 5. Reload xray (refresh user table)
-systemctl reload xray >/dev/null 2>&1
+# 6. Reload xray (refresh user table). Skip untuk SSH (tidak relevan).
+if [ "$proto" != "ssh" ]; then
+    systemctl reload xray >/dev/null 2>&1
+fi
 
 exit 0

@@ -124,8 +124,10 @@ curl -s --max-time "$TIME" -d "chat_id=$CHATID&disable_web_page_preview=1&text=$
 
 systemctl enable atd >/dev/null 2>&1
 systemctl start atd >/dev/null 2>&1
-# At-job: pkill dulu (kick sesi aktif), userdel, lalu cleanup file.
-echo "pkill -KILL -u ${Login} 2>/dev/null; sleep 2; userdel -f ${Login} 2>/dev/null; sed -i '/^#ssh# ${Login} /d; /^### ${Login} /d' /etc/ssh/.ssh.db; rm -f /etc/ssh/${Login} /etc/kyt/limit/ssh/ip/${Login} /var/www/html/ssh-${Login}.txt" | at now + ${DURATION_MIN} minutes
+# At-job: pakai helper terpusat xyz-trial-cleanup (sebelumnya inline-sed
+# yang harus di-escape 4 level). Helper akan: pkill, userdel, hapus DB,
+# hapus file pendukung, dan disconnect-user (idempoten).
+echo "/usr/local/sbin/xyz-trial-cleanup ssh '${Login}' '${expe}'" | at now + ${DURATION_MIN} minutes
 
 clear
 echo -e "$BLUE◇━━━━━━━━━━━━━━━━━━━━◇$NC"

@@ -88,3 +88,85 @@ Saya **tidak** mengubah ini di PR ini karena:
 
 - `limit/menu.zip` (binary; dibuild dari `limit/menu-src/`)
 - `limit/menu-src/` (folder baru — source asli per-file untuk review)
+
+
+
+---
+
+# Pass 2: Validasi Input + Konsistensi Output + Migrasi Token
+
+Iterasi ini menyelesaikan sisa bug yang tidak masuk PR sebelumnya, fokus
+pada validasi input add-script dan konsistensi UX.
+
+## 🟠 Bug Yang Diperbaiki
+
+| # | Bug | File | Perbaikan |
+|---|-----|------|-----------|
+| 1 | `addws`/`addvless`/`addtr`/`addss` **tidak memvalidasi** `masaaktif`/`Quota`/`iplimit` → input non-numerik membuat `date -d "abc days"` gagal sunyi, entry config & DB rusak. | `addws`, `addvless`, `addtr`, `addss` | Tambah validasi regex `^[1-9][0-9]*$` untuk expired (refuse + return ke menu kalau gagal); `Quota`/`iplimit` di-clamp ke `0` kalau bukan angka. Pola disamakan dengan `addssh`. |
+| 2 | Header notif Telegram `addvless` mengirim `XRAY/VMESS SUCCES CREATED` (padahal VLESS) → audit-log Telegram membingungkan saat scaling tim CS. | `addvless` | Diubah ke `XRAY/VLESS SUCCES CREATED`. |
+| 3 | `trialvless` notif Telegram juga melabeli VLESS sebagai `XRAY/VMESS`. | `trialvless` | Diubah ke `XRAY/VLESS`. |
+| 4 | `trialvless` heredoc `/var/www/html/vless-$user.txt` dimulai dengan baris literal `clear` → kata "clear" muncul sebagai konten file yang dipublikasikan ke pelanggan. | `trialvless` | Hapus baris `clear` dari isi heredoc. |
+| 5 | YAML format Clash di `addvless` & `trialvless` punya **indentasi rusak** untuk `grpc-opts`: `grpc-mode` di 2 spasi & `grpc-service-name` di 4 spasi → ditolak parser Clash/Stash. | `addvless`, `trialvless` | Indentasi diperbaiki: keduanya 4 spasi (anak dari `grpc-opts:`). |
+| 6 | `addvless` heredoc berisi karakter `"` nyangkut sebelum `END` → file txt yang dipublikasikan punya karakter aneh di baris terakhir. | `addvless` | Dangling `"` dihapus. |
+| 7 | `addss` & `trialss` punya 2 baris dead code `shadowsockslink`/`shadowsockslink1` yang memakai variabel `$tls` yang tidak pernah didefinisikan → menghasilkan link broken (port kosong) yang untungnya tidak dipakai output, tapi membingungkan saat audit. | `addss`, `trialss` | Dihapus. Link akhir yang dipakai (`sslinkws`/`nonsslinkws`/`sslinkgrpc`) sudah benar. |
+| 8 | Trial SSH masih memakai at-job dengan inline-sed (4 level escape neraka) padahal protokol lain sudah refactor ke `xyz-trial-cleanup`. | `trial`, `xyz-trial-cleanup` | Tambah branch `ssh)` di helper. At-job SSH sekarang cuma `xyz-trial-cleanup ssh '<user>' '<exp>'`. Konsisten dengan vless/trojan/vmess/ss. |
+
+## 🔐 Migrasi Token Bot Sekunder
+
+Token bot sekunder (`KEY2`/`CHATID2` untuk notif transaksi) sebelumnya
+hardcoded di 4 file: `addssh`, `addvless`, `addws`, `addtr`. Token sudah
+ter-leak di public git history.
+
+Iterasi ini menambahkan loader yang mengutamakan file config:
+
+```bash
+if [ -r /etc/bot/.bot2.db ]; then
+  CHATID2=$(grep -E "^#bot2# " /etc/bot/.bot2.db | cut -d ' ' -f 3)
+  KEY2=$(grep -E "^#bot2# " /etc/bot/.bot2.db | cut -d ' ' -f 2)
+fi
+: "${CHATID2:=-1001381824793}"
+: "${KEY2:=8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE}"
+```
+
+Format file (analog `#bot#` untuk bot utama):
+
+```
+#bot2# <BOT_TOKEN_BARU> <CHAT_ID>
+```
+
+### Tindakan Yang Masih Disarankan
+
+1. **Revoke token lama** via `@BotFather` → `/revoke`.
+2. Buat token baru, simpan ke `/etc/bot/.bot2.db`:
+   ```bash
+   echo "#bot2# <TOKEN_BARU> <CHAT_ID>" | sudo tee /etc/bot/.bot2.db
+   sudo chmod 600 /etc/bot/.bot2.db
+   ```
+3. Force-rewrite git history untuk menghapus token lama (BFG / `git filter-repo`).
+4. Setelah verifikasi semua server pakai `.bot2.db`, hapus fallback hardcode di
+   pass berikutnya.
+
+Fallback dipertahankan agar deployment lama yang belum buat `.bot2.db` tetap
+mengirim notif (ke channel lama yang token-nya pasti akan di-revoke).
+
+## ⚠️ Yang TIDAK diubah (sengaja)
+
+- **Schema asimetri DB shadowsocks** (`addss` tulis 4 field, `trialss` tulis 5).
+  Listing tool (`user-ss`) hanya membaca field 2-4, jadi tidak break, tapi
+  tools custom di luar repo bisa berasumsi lain. Saya pilih tidak ubah untuk
+  hindari risiko regressi pada listing/cek script lain.
+- **Cosmetic tag `<code>` tidak match di header notif `addtr`/`addws`** —
+  Telegram cukup toleran dan tidak crash. Bisa di-cleanup di pass terpisah.
+
+## Files Modified (pass 2)
+
+- `limit/menu-src/addssh` — loader `.bot2.db`
+- `limit/menu-src/addws` — validasi input + loader `.bot2.db`
+- `limit/menu-src/addvless` — validasi input + label VLESS + YAML grpc-opts + dangling quote + loader `.bot2.db`
+- `limit/menu-src/addtr` — validasi input + loader `.bot2.db`
+- `limit/menu-src/addss` — validasi input + hapus dead code `$tls`
+- `limit/menu-src/trialvless` — label VLESS + YAML grpc-opts + hapus baris `clear`
+- `limit/menu-src/trialss` — hapus dead code `$tls`
+- `limit/menu-src/trial` — refactor ke `xyz-trial-cleanup ssh`
+- `limit/menu-src/xyz-trial-cleanup` — tambah branch `ssh)`
+- `limit/menu.zip` — rebuild dari `menu-src/` (password ZipCrypto sama)

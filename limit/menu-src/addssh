@@ -27,8 +27,15 @@ export TIME="10"
 export URL="https://api.telegram.org/bot$KEY/sendMessage"
 clear
 # getting notif trx
-CHATID2="-1001381824793"
-KEY2="8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE"
+# Token sekunder: utamakan /etc/bot/.bot2.db (rotasi tanpa edit script);
+# fallback ke value lama untuk backward-compat. Token lama sudah ter-leak di
+# git history, segera revoke + tulis ulang ke .bot2.db.
+if [ -r /etc/bot/.bot2.db ]; then
+  CHATID2=$(grep -E "^#bot2# " /etc/bot/.bot2.db | cut -d ' ' -f 3)
+  KEY2=$(grep -E "^#bot2# " /etc/bot/.bot2.db | cut -d ' ' -f 2)
+fi
+: "${CHATID2:=-1001381824793}"
+: "${KEY2:=8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE}"
 export TIME="10"
 export URL2="https://api.telegram.org/bot$KEY2/sendMessage"
 clear

@@ -39,8 +39,15 @@ export TIME="10"
 export URL="https://api.telegram.org/bot$KEY/sendMessage"
 clear
 # getting notif trx
-CHATID2="-1001381824793"
-KEY2="8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE"
+# Token sekunder: utamakan /etc/bot/.bot2.db (rotasi tanpa edit script);
+# fallback ke value lama untuk backward-compat. Token lama sudah ter-leak di
+# git history, segera revoke + tulis ulang ke .bot2.db.
+if [ -r /etc/bot/.bot2.db ]; then
+  CHATID2=$(grep -E "^#bot2# " /etc/bot/.bot2.db | cut -d ' ' -f 3)
+  KEY2=$(grep -E "^#bot2# " /etc/bot/.bot2.db | cut -d ' ' -f 2)
+fi
+: "${CHATID2:=-1001381824793}"
+: "${KEY2:=8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE}"
 export TIME="10"
 export URL2="https://api.telegram.org/bot$KEY2/sendMessage"
 clear
@@ -89,6 +96,15 @@ uuid="${CUSTOM_UUID:-$(cat /proc/sys/kernel/random/uuid)}"
 read -p "Expired (days): " masaaktif
 read -p "Limit User (GB): " Quota
 read -p "Limit User (IP): " iplimit
+# Validasi input numeric (cegah `date -d "abc days"` gagal sunyi → entry rusak).
+if ! [[ "$masaaktif" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Expired days harus angka positif."
+    read -n 1 -s -r -p "Press any key to back on menu"
+    m-trojan
+    exit 0
+fi
+[[ "$Quota"   =~ ^[0-9]+$ ]] || Quota=0
+[[ "$iplimit" =~ ^[0-9]+$ ]] || iplimit=0
 tgl=$(date -d "$masaaktif days" +"%d")
 bln=$(date -d "$masaaktif days" +"%b")
 thn=$(date -d "$masaaktif days" +"%Y")

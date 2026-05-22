@@ -82,6 +82,14 @@ cipher="aes-128-gcm"
 uuid=$(cat /proc/sys/kernel/random/uuid)
 read -p "Expired (days): " masaaktif
 read -p "Limit User (GB): " Quota
+# Validasi input numeric.
+if ! [[ "$masaaktif" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Expired days harus angka positif."
+    read -n 1 -s -r -p "Press any key to back on menu"
+    m-ssws
+    exit 0
+fi
+[[ "$Quota" =~ ^[0-9]+$ ]] || Quota=0
 tgl=$(date -d "$masaaktif days" +"%d")
 bln=$(date -d "$masaaktif days" +"%b")
 thn=$(date -d "$masaaktif days" +"%Y")
@@ -99,8 +107,9 @@ echo $cipher:$uuid > /tmp/log
 shadowsocks_base64=$(cat /tmp/log)
 echo -n "${shadowsocks_base64}" | base64 > /tmp/log1
 shadowsocks_base64e=$(cat /tmp/log1)
-shadowsockslink="ss://${shadowsocks_base64e}@$domain:$tls?plugin=xray-plugin;mux=0;path=/ss-ws;host=$domain;tls#${user}"
-shadowsockslink1="ss://${shadowsocks_base64e}@$domain:$tls?plugin=xray-plugin;mux=0;serviceName=ss-grpc;host=$domain;tls#${user}"
+# (Hapus 2 baris dead code shadowsockslink/shadowsockslink1 yang memakai $tls
+#  yang tidak pernah didefinisikan — link akhir yang dipakai adalah
+#  sslinkws/nonsslinkws/sslinkgrpc di bawah ini.)
 
 #buat ss WEBSOCKET
 sslinkws="ss://${shadowsocks_base64e}@${domain}:443?path=/ss-ws&security=tls&encryption=none&type=ws#${user}"
