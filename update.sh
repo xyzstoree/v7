@@ -64,26 +64,60 @@ res1() {
     sudo dos2unix /usr/local/sbin/* 2>/dev/null || true
     rm -rf menu menu.zip update.sh
 
-    # Helper Xray gRPC API user-management (zero-drop add/remove user, no
-    # restart xray). Diambil langsung dari repo karena bisa jadi belum
-    # ter-pack di menu.zip lama. Aman idempoten.
-    for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate; do
+    # Helper Xray gRPC API user-management + recovery script.
+    for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate xyz-recovery; do
         wget --timeout=30 --tries=2 -q -O /usr/local/sbin/$h \
             "https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu-src/$h"
         chmod +x /usr/local/sbin/$h 2>/dev/null
     done
 
-    # Migrasi /etc/xray/config.json: inject "tag" pada inbound yg belum
-    # punya (idempoten). Tag dibutuhkan supaya `xray api adu/rmu` bisa
-    # menarget inbound dgn tepat. Setelah ini server lama bisa pakai
-    # API user-management tanpa harus install ulang.
-    [ -x /usr/local/sbin/xyz-xray-tag-migrate ] && \
-        /usr/local/sbin/xyz-xray-tag-migrate /etc/xray/config.json >/dev/null 2>&1
-    # Reload xray sekali-saja-saat-update untuk apply tag (kali ini
-    # memang HARUS restart karena ini perubahan struktur config).
-    # Setelah ini, operasi user (add/del/renew/lock dst.) sepenuhnya
-    # zero-drop via gRPC API.
+    # =====================================================================
+    # Tag migration dengan safety net berlapis. Tag dibutuhkan supaya
+    # `xray api adu/rmu` bisa menarget inbound; tanpa tag, skrip
+    # add/del/renew baru tetap berfungsi tapi fall-back ke no-op API
+    # (akun aktif setelah xray restart, bukan instan).
+    #
+    # Pelajaran dari kejadian: tag-migrate awk yang ngubah JSON langsung
+    # bisa rusakin config kalau format inbound user beda dengan template.
+    # Sekarang kami:
+    #   1. Backup config eksplisit ke .bak.update sebelum migrate.
+    #   2. Validasi hasil migrate dengan `xray test -config`.
+    #   3. Kalau invalid → auto-rollback ke backup.
+    #   4. Restart xray + verify aktif. Kalau tidak aktif → rollback +
+    #      restart lagi.
+    # =====================================================================
+    XRAY_BIN=$(command -v xray 2>/dev/null || echo /usr/local/bin/xray)
+    PRE_MIGRATE_BAK="/etc/xray/config.json.bak.update"
+    cp -p /etc/xray/config.json "$PRE_MIGRATE_BAK" 2>/dev/null
+
+    if [ -x /usr/local/sbin/xyz-xray-tag-migrate ]; then
+        /usr/local/sbin/xyz-xray-tag-migrate /etc/xray/config.json >/dev/null 2>&1 || true
+
+        # Validasi: kalau hasil migrate ditolak xray, langsung rollback.
+        if [ -x "$XRAY_BIN" ]; then
+            if ! "$XRAY_BIN" test -config /etc/xray/config.json >/tmp/xyz-update-xraytest.log 2>&1; then
+                echo "WARNING: tag-migrate menghasilkan config INVALID, rollback ke backup." >&2
+                tail -n 10 /tmp/xyz-update-xraytest.log >&2
+                cp -p "$PRE_MIGRATE_BAK" /etc/xray/config.json
+            fi
+        fi
+    fi
+
+    # Restart xray. Kalau gagal start (config-related), rollback ke
+    # backup pre-migrate dan coba lagi sekali.
     systemctl restart xray >/dev/null 2>&1
+    sleep 2
+    if ! systemctl is-active --quiet xray; then
+        echo "WARNING: xray gagal start setelah update, rollback config." >&2
+        cp -p "$PRE_MIGRATE_BAK" /etc/xray/config.json 2>/dev/null
+        systemctl restart xray >/dev/null 2>&1
+        sleep 2
+        if ! systemctl is-active --quiet xray; then
+            echo "FATAL: xray masih gagal start setelah rollback." >&2
+            journalctl -u xray -n 20 --no-pager >&2
+        fi
+    fi
+
     # Self-healing: re-import semua user aktif ke runtime Xray.
     ( sleep 5 ; [ -x /usr/local/sbin/xyz-xray-sync ] && \
         /usr/local/sbin/xyz-xray-sync >/dev/null 2>&1 ) &

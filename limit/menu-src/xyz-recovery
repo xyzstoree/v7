@@ -1,0 +1,80 @@
+#!/bin/bash
+# xyz-recovery — Recovery cepat kalau xray offline setelah update.
+# Usage: bash xyz-recovery
+#
+# Aksi:
+#   1. Cari backup config.json terbaru dari xyz-xray-tag-migrate.
+#   2. Validate backup itu VS current config.json.
+#   3. Restore dari backup kalau current rusak / xray gagal start.
+#   4. Restart xray, verify aktif.
+
+set -u
+CONF="/etc/xray/config.json"
+XRAY_BIN="${XRAY_BIN:-/usr/local/bin/xray}"
+[ -x "$XRAY_BIN" ] || XRAY_BIN="$(command -v xray 2>/dev/null || echo /usr/local/bin/xray)"
+
+echo ">>> [1/5] Cek status xray sekarang..."
+systemctl status xray --no-pager 2>/dev/null | head -10
+echo ""
+
+echo ">>> [2/5] Cek backup tersedia..."
+LATEST_BAK=$(ls -t "${CONF}".bak.* 2>/dev/null | head -n1)
+if [ -z "$LATEST_BAK" ]; then
+    echo "TIDAK ADA backup di ${CONF}.bak.* — tidak bisa recovery otomatis."
+    echo ""
+    echo "Coba reinstall:"
+    echo "  bash <(curl -sL https://raw.githubusercontent.com/xyzstoree/v7/main/install.sh)"
+    exit 1
+fi
+echo "Backup ditemukan: $LATEST_BAK"
+ls -la "$LATEST_BAK"
+echo ""
+
+echo ">>> [3/5] Validate config saat ini via 'xray test'..."
+if "$XRAY_BIN" test -config "$CONF" >/tmp/xyz-recovery.log 2>&1; then
+    echo "Config saat ini VALID. xray seharusnya bisa start."
+    echo ""
+    echo "Coba restart manual:"
+    echo "  systemctl daemon-reload && systemctl restart xray && systemctl status xray"
+    echo ""
+    echo "Kalau xray masih offline padahal config valid, kemungkinan masalah lain"
+    echo "(port conflict, sertifikat, dll). Cek: journalctl -u xray -n 50"
+    exit 0
+fi
+echo "Config saat ini INVALID. Detail error xray:"
+tail -n 15 /tmp/xyz-recovery.log
+echo ""
+
+echo ">>> [4/5] Validate backup..."
+if "$XRAY_BIN" test -config "$LATEST_BAK" >/tmp/xyz-recovery.log 2>&1; then
+    echo "Backup VALID. Restoring..."
+    cp -p "$CONF" "${CONF}.broken.$(date +%Y%m%d-%H%M%S)"
+    cp -p "$LATEST_BAK" "$CONF"
+    echo "Config rusak disimpan ke ${CONF}.broken.* untuk debug nanti."
+else
+    echo "Backup juga INVALID. Detail:"
+    tail -n 15 /tmp/xyz-recovery.log
+    echo ""
+    echo "Cari backup lebih lama:"
+    ls -la "${CONF}".bak.* 2>/dev/null
+    echo ""
+    echo "Coba restore manual dari salah satu backup di atas:"
+    echo "  cp /etc/xray/config.json.bak.<TANGGAL> /etc/xray/config.json"
+    echo "  systemctl restart xray"
+    exit 1
+fi
+echo ""
+
+echo ">>> [5/5] Restart xray..."
+systemctl daemon-reload
+systemctl restart xray
+sleep 3
+if systemctl is-active --quiet xray; then
+    echo "OK xray ACTIVE. Recovery sukses."
+    echo ""
+    systemctl status xray --no-pager | head -8
+else
+    echo "FAIL xray masih gagal start. Detail:"
+    journalctl -u xray -n 30 --no-pager
+    exit 1
+fi

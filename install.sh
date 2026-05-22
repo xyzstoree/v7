@@ -808,7 +808,7 @@ rm -rf menu menu.zip update.sh
 # Helper Xray gRPC API user-management (zero-drop add/remove user, no
 # restart xray). Diambil langsung dari repo karena bisa jadi belum
 # ter-pack di menu.zip lama. Aman idempoten dijalankan ulang.
-for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate; do
+for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate xyz-recovery; do
     wget -q -O /usr/local/sbin/$h "${REPO}limit/menu-src/$h"
     chmod +x /usr/local/sbin/$h
 done

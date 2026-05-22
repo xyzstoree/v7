@@ -11,6 +11,12 @@
 # yang putuskan (biasanya cuma efektif setelah xray restart, dan itu OK
 # karena migrate hanya jalan saat boot).
 #
+# SAFETY:
+#   - Backup ke .bak.YYYYMMDD sebelum modifikasi.
+#   - Validasi setiap injection dengan `xray test -config` (kalau xray
+#     binary tersedia). Kalau hasil INVALID, rollback inject itu.
+#   - Sanity check ukuran file tidak shrink berlebihan.
+#
 # Detection:
 #   - Marker //#vless / //#vmess / //#trojanws / //#ssws (WS)
 #   - Marker //#vlessgrpc / //#vmessgrpc / //#trojangrpc / //#ssgrpc (gRPC)
@@ -21,6 +27,26 @@ set -u
 
 CONF="${1:-/etc/xray/config.json}"
 [ -f "$CONF" ] || exit 0
+
+XRAY_BIN="${XRAY_BIN:-/usr/local/bin/xray}"
+[ -x "$XRAY_BIN" ] || XRAY_BIN="$(command -v xray 2>/dev/null || true)"
+
+# Validasi: kembali 0 kalau config valid menurut xray. Kalau xray binary
+# tidak ada, fallback ke success (tidak bisa validate, jadi terima saja).
+validate_xray() {
+    local f="$1"
+    if [ -z "$XRAY_BIN" ] || [ ! -x "$XRAY_BIN" ]; then
+        return 0
+    fi
+    "$XRAY_BIN" test -config "$f" >/dev/null 2>&1
+}
+
+# Pastikan input config sendiri sudah valid sebelum kita sentuh. Kalau
+# input invalid, jangan modifikasi — caller (update.sh) akan handle.
+if ! validate_xray "$CONF"; then
+    [ -n "${XYZ_DEBUG:-}" ] && echo "[tag-migrate] input config invalid, skip" >&2
+    exit 0
+fi
 
 # Backup once per day (rotate manual cleanup)
 backup="${CONF}.bak.$(date +%Y%m%d)"
@@ -101,7 +127,10 @@ inject_one() {
                         # insertion: after first line containing "protocol":
                         n=split(block_buf, lines, "\n")
                         injected=0
-                        for (i=1;i<=n;i++) {
+                        # n_lines includes empty trailing line from split, skip last
+                        last_idx = n
+                        if (lines[n] == "") last_idx = n-1
+                        for (i=1;i<=last_idx;i++) {
                             print lines[i]
                             if (!injected && lines[i] ~ /"protocol"[[:space:]]*:/) {
                                 # Match indentation of protocol line
@@ -112,10 +141,18 @@ inject_one() {
                             }
                         }
                     } else {
-                        printf "%s", block_buf
+                        # Already has tag — output buffer as-is (without trailing empty)
+                        n=split(block_buf, lines, "\n")
+                        last_idx = n
+                        if (lines[n] == "") last_idx = n-1
+                        for (i=1;i<=last_idx;i++) print lines[i]
                     }
                 } else {
-                    printf "%s", block_buf
+                    # No marker — output as-is
+                    n=split(block_buf, lines, "\n")
+                    last_idx = n
+                    if (lines[n] == "") last_idx = n-1
+                    for (i=1;i<=last_idx;i++) print lines[i]
                 }
                 block_start=0; block_has_marker=0; block_buf=""; depth=0
             }
@@ -126,17 +163,29 @@ inject_one() {
     }
     ' "$CONF" > "$tmp" 2>/dev/null
 
-    # Validasi: hasil tidak boleh kosong / shrink drastis (>10%).
-    if [ -s "$tmp" ]; then
-        local old_size new_size
-        old_size=$(wc -c <"$CONF")
-        new_size=$(wc -c <"$tmp")
-        if [ "$new_size" -ge $((old_size - old_size / 10)) ]; then
-            mv "$tmp" "$CONF"
-            return 0
-        fi
+    # Validasi 1: hasil tidak boleh kosong / shrink drastis (>10%).
+    if [ ! -s "$tmp" ]; then
+        rm -f "$tmp"
+        return 0
     fi
-    rm -f "$tmp"
+    local old_size new_size
+    old_size=$(wc -c <"$CONF")
+    new_size=$(wc -c <"$tmp")
+    if [ "$new_size" -lt $((old_size - old_size / 10)) ]; then
+        [ -n "${XYZ_DEBUG:-}" ] && echo "[tag-migrate] $marker: shrink drastis, skip" >&2
+        rm -f "$tmp"
+        return 0
+    fi
+
+    # Validasi 2: hasil masih JSON valid menurut xray. Kalau tidak, skip
+    # injection ini (jangan rusak config yang sebelumnya valid).
+    if ! validate_xray "$tmp"; then
+        [ -n "${XYZ_DEBUG:-}" ] && echo "[tag-migrate] $marker: hasil invalid, skip" >&2
+        rm -f "$tmp"
+        return 0
+    fi
+
+    mv "$tmp" "$CONF"
     return 0
 }
 
