@@ -1,5 +1,20 @@
 #!/bin/bash
-# limit-ip - FIXED: correct sed patterns for vless (#&) and trojan (#!)
+# limit-ip - Auto-kick user yang melebihi IP-limit dengan ZERO-DROP user lain.
+#
+# Sebelumnya: edit config.json + `systemctl restart xray` → semua koneksi
+# user lain ikut putus tiap kali ada satu user kena kick.
+#
+# Sekarang: panggil xyz-xray-user del (gRPC API) untuk men-deactivate user
+# di runtime, dan xyz-disconnect-user untuk kick socket aktif user yang
+# bersangkutan. Tidak ada restart/reload xray sama sekali.
+#
+# Selain itu, sed-pattern lama untuk vless/trojan menargetkan prefix yang
+# salah (#& dan #! padahal DB & config sekarang pakai //vl, //tr, ###).
+# Karena delete dari config.json sekarang dilakukan via API, kita tidak
+# lagi mengandalkan prefix tersebut.
+
+XRAY_USER_BIN="/usr/local/sbin/xyz-xray-user"
+XYZ_DISCONNECT="/usr/local/sbin/xyz-disconnect-user"
 
 send_log(){
   [[ -f /etc/bot/.bot.db ]] || return 0
@@ -19,6 +34,32 @@ send_log(){
   curl -s --max-time 10 -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" "$URL" >/dev/null
 }
 
+# kick_user <proto> <user>
+# Hapus user dari config.json (untuk persistence) + runtime Xray (live, no restart)
+# + putus paksa socket aktif. Aman dipanggil idempoten.
+kick_user() {
+    local proto="$1" user="$2" exp marker u_esc e_esc db
+    case "$proto" in
+        vmess)  marker="//vm"; db="/etc/vmess/.vmess.db" ;;
+        vless)  marker="//vl"; db="/etc/vless/.vless.db" ;;
+        trojan) marker="//tr"; db="/etc/trojan/.trojan.db" ;;
+        *) return ;;
+    esac
+    exp=$(grep -E "^${marker} ${user} " /etc/xray/config.json | head -n1 | cut -d ' ' -f 3)
+    u_esc=$(printf '%s' "$user" | sed 's/[].\/*^$[]/\\&/g')
+    e_esc=$(printf '%s' "$exp"  | sed 's/[].\/*^$[]/\\&/g')
+    m_esc=$(printf '%s' "$marker" | sed 's|/|\\/|g')
+
+    if [ -n "$exp" ]; then
+        sed -i "/^${m_esc} ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json
+    fi
+    [ -f "$db" ] && sed -i -E "/^### ${u_esc}( |\$)/d" "$db"
+
+    # Live deactivate via API (no restart).
+    [ -x "$XRAY_USER_BIN" ] && "$XRAY_USER_BIN" del "$proto" "$user" >/dev/null 2>&1
+    [ -x "$XYZ_DISCONNECT" ] && "$XYZ_DISCONNECT" "$user" "$proto" >/dev/null 2>&1
+}
+
 vmip(){
 while true; do
   echo -n > /var/log/xray/access.log
@@ -31,10 +72,7 @@ while true; do
     [[ -z "$ehh" ]] && continue
     cekcek=$(echo -e "$ehh" | wc -l)
     if [[ $cekcek -gt ${iplimit:-99} ]]; then
-      exp=$(grep -w "^### $user" "/etc/xray/config.json" | awk '{print $3}' | sort -u)
-      sed -i "/^### $user $exp/,/^},{/d" /etc/xray/config.json
-      sed -i "/^### $user $exp/d" /etc/vmess/.vmess.db
-      systemctl restart xray >/dev/null 2>&1
+      kick_user vmess "$user"
       rm -f /etc/kyt/limit/vmess/ip/$user
       send_log
     fi
@@ -56,11 +94,7 @@ while true; do
     [[ -z "$ehh" ]] && continue
     cekcek=$(echo -e "$ehh" | wc -l)
     if [[ $cekcek -gt ${iplimit:-99} ]]; then
-      exp=$(grep -w "^#& $user" "/etc/xray/config.json" | awk '{print $3}' | sort -u)
-      sed -i "/^#& $user $exp/,/^},{/d" /etc/xray/config.json
-      # FIX: vless DB uses #& prefix, not ###
-      sed -i "/^#& $user $exp/d" /etc/vless/.vless.db
-      systemctl restart xray >/dev/null 2>&1
+      kick_user vless "$user"
       rm -f /etc/kyt/limit/vless/ip/$user
       send_log
     fi
@@ -82,11 +116,7 @@ while true; do
     [[ -z "$ehh" ]] && continue
     cekcek=$(echo -e "$ehh" | wc -l)
     if [[ $cekcek -gt ${iplimit:-99} ]]; then
-      exp=$(grep -w "^#! $user" "/etc/xray/config.json" | awk '{print $3}' | sort -u)
-      sed -i "/^#! $user $exp/,/^},{/d" /etc/xray/config.json
-      # FIX: trojan DB uses #! prefix, not ###
-      sed -i "/^#! $user $exp/d" /etc/trojan/.trojan.db
-      systemctl restart xray >/dev/null 2>&1
+      kick_user trojan "$user"
       rm -f /etc/kyt/limit/trojan/ip/$user
       send_log
     fi

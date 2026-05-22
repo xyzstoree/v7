@@ -63,6 +63,37 @@ res1() {
     mv -f menu/* /usr/local/sbin/
     sudo dos2unix /usr/local/sbin/* 2>/dev/null || true
     rm -rf menu menu.zip update.sh
+
+    # Helper Xray gRPC API user-management (zero-drop add/remove user, no
+    # restart xray). Diambil langsung dari repo karena bisa jadi belum
+    # ter-pack di menu.zip lama. Aman idempoten.
+    for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate; do
+        wget --timeout=30 --tries=2 -q -O /usr/local/sbin/$h \
+            "https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu-src/$h"
+        chmod +x /usr/local/sbin/$h 2>/dev/null
+    done
+
+    # Migrasi /etc/xray/config.json: inject "tag" pada inbound yg belum
+    # punya (idempoten). Tag dibutuhkan supaya `xray api adu/rmu` bisa
+    # menarget inbound dgn tepat. Setelah ini server lama bisa pakai
+    # API user-management tanpa harus install ulang.
+    [ -x /usr/local/sbin/xyz-xray-tag-migrate ] && \
+        /usr/local/sbin/xyz-xray-tag-migrate /etc/xray/config.json >/dev/null 2>&1
+    # Reload xray sekali-saja-saat-update untuk apply tag (kali ini
+    # memang HARUS restart karena ini perubahan struktur config).
+    # Setelah ini, operasi user (add/del/renew/lock dst.) sepenuhnya
+    # zero-drop via gRPC API.
+    systemctl restart xray >/dev/null 2>&1
+    # Self-healing: re-import semua user aktif ke runtime Xray.
+    ( sleep 5 ; [ -x /usr/local/sbin/xyz-xray-sync ] && \
+        /usr/local/sbin/xyz-xray-sync >/dev/null 2>&1 ) &
+
+    # Update xray.service unit untuk set ExecReload (kalau belum ada).
+    if ! grep -q '^ExecReload=' /etc/systemd/system/xray.service 2>/dev/null; then
+        sed -i '/^ExecStart=.*xray run/a ExecReload=/bin/kill -HUP $MAINPID' \
+            /etc/systemd/system/xray.service
+        systemctl daemon-reload >/dev/null 2>&1
+    fi
     # Auto-fix /etc/profile: hapus SEMUA referensi botapi.conf (baik yang
     # unguarded `source ...` maupun duplikat guarded yang sudah numpuk dari
     # run sebelumnya), lalu tambah satu baris guarded. Idempoten.

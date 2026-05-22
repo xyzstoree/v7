@@ -76,8 +76,8 @@ rm -f "/etc/trojan/$user"
 rm -f "/etc/kyt/limit/trojan/ip/$user"
 rm -f "/var/www/html/trojan-$user.txt"
 
+/usr/local/sbin/xyz-xray-user del trojan "$user" >/dev/null 2>&1
 /usr/local/sbin/xyz-disconnect-user "$user" trojan >/dev/null 2>&1
-systemctl reload xray > /dev/null 2>&1
 
 clear
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"

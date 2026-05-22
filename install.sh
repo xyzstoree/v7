@@ -445,6 +445,7 @@ CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
+ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartPreventExitStatus=23
 LimitNPROC=10000
@@ -796,6 +797,14 @@ chmod +x menu/*
 mv -f menu/* /usr/local/sbin/
 dos2unix /usr/local/sbin/install-plugin 2>/dev/null
 rm -rf menu menu.zip update.sh
+
+# Helper Xray gRPC API user-management (zero-drop add/remove user, no
+# restart xray). Diambil langsung dari repo karena bisa jadi belum
+# ter-pack di menu.zip lama. Aman idempoten dijalankan ulang.
+for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate; do
+    wget -q -O /usr/local/sbin/$h "${REPO}limit/menu-src/$h"
+    chmod +x /usr/local/sbin/$h
+done
 }
 function profile(){
 clear
@@ -893,6 +902,19 @@ systemctl restart nginx
 systemctl restart xray
 systemctl restart cron
 systemctl restart haproxy
+
+# Migrate existing /etc/xray/config.json: inject "tag" field ke setiap
+# inbound (idempoten — tidak akan ubah file kalau tag sudah ada). Jaga-jaga
+# kalau install.sh dipanggil ulang di server existing yang config-nya
+# pre-tag.
+[ -x /usr/local/sbin/xyz-xray-tag-migrate ] && \
+    /usr/local/sbin/xyz-xray-tag-migrate /etc/xray/config.json >/dev/null 2>&1
+
+# Re-import semua user aktif dari .db files ke runtime Xray via gRPC API.
+# Self-healing setelah restart pertama. Jalan async supaya tidak
+# memblokir installer kalau API belum siap.
+( sleep 5 ; [ -x /usr/local/sbin/xyz-xray-sync ] && \
+    /usr/local/sbin/xyz-xray-sync >/dev/null 2>&1 ) &
 print_success "Enable Service"
 clear
 }

@@ -43,6 +43,7 @@
       "listen": "127.0.0.1",
       "port": 10001,
       "protocol": "vless",
+      "tag": "vless-ws-in",
       "settings": {
         "decryption": "none",
         "clients": [
@@ -63,6 +64,7 @@
       "listen": "127.0.0.1",
       "port": 10002,
       "protocol": "vmess",
+      "tag": "vmess-ws-in",
       "settings": {
         "clients": [
           {
@@ -83,6 +85,7 @@
       "listen": "127.0.0.1",
       "port": 10003,
       "protocol": "trojan",
+      "tag": "trojan-ws-in",
       "settings": {
         "decryption": "none",
         "clients": [
@@ -104,6 +107,7 @@
       "listen": "127.0.0.1",
       "port": 10004,
       "protocol": "shadowsocks",
+      "tag": "ss-ws-in",
       "settings": {
         "clients": [
           {
@@ -125,6 +129,7 @@
       "listen": "127.0.0.1",
       "port": 10005,
       "protocol": "vless",
+      "tag": "vless-grpc-in",
       "settings": {
         "decryption": "none",
         "clients": [
@@ -145,6 +150,7 @@
       "listen": "127.0.0.1",
       "port": 10006,
       "protocol": "vmess",
+      "tag": "vmess-grpc-in",
       "settings": {
         "clients": [
           {
@@ -165,6 +171,7 @@
       "listen": "127.0.0.1",
       "port": 10007,
       "protocol": "trojan",
+      "tag": "trojan-grpc-in",
       "settings": {
         "decryption": "none",
         "clients": [
@@ -185,6 +192,7 @@
       "listen": "127.0.0.1",
       "port": 10008,
       "protocol": "shadowsocks",
+      "tag": "ss-grpc-in",
       "settings": {
         "clients": [
           {

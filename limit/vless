@@ -16,6 +16,14 @@ TEXT="
 curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
 }
 
+# kick_user — auto-suspend zero-drop (pengganti `systemctl restart xray`).
+XRAY_USER_BIN="/usr/local/sbin/xyz-xray-user"
+XYZ_DISCONNECT="/usr/local/sbin/xyz-disconnect-user"
+kick_user() {
+    [ -x "$XRAY_USER_BIN" ] && "$XRAY_USER_BIN" del "$1" "$2" >/dev/null 2>&1
+    [ -x "$XYZ_DISCONNECT" ] && "$XYZ_DISCONNECT" "$2" "$1" >/dev/null 2>&1
+}
+
 function con() {
     local -i bytes=$1;
     if [[ $bytes -lt 1024 ]]; then
@@ -81,7 +89,7 @@ for user in ${data[@]}
 	  rm -f /etc/limit/vless/$user
 	  rm -f /etc/limit/vless/quota/$user
 	  rm -f /var/www/html/vless-$user.txt
-      systemctl restart xray >> /dev/null 2>&1
+      kick_user vless "$user"
       else
       echo ""
       fi

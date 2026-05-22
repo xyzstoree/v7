@@ -101,7 +101,8 @@ if [ -f /etc/vless/.vless.db ]; then
     sed -i -E "s|^### ${u_esc} ${e_esc} ([^ ]+) [^ ]+ [^ ]+\$|### $user $exp4 \\1 ${Quota} ${iplim}|" /etc/vless/.vless.db
 fi
 
-systemctl reload xray > /dev/null 2>&1
+# Renew = cuma ubah tanggal kadaluarsa di config + DB. UUID tidak berubah,
+# jadi runtime user state di Xray tetap valid → tidak perlu reload/restart.
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 echo " VLESS Account Was Successfully Renewed"

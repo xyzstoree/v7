@@ -1,12 +1,22 @@
 [Unit]
 Description=Automatically
-After=network.target
+After=network.target xray.service
+Wants=xray.service
 
 [Service]
-Type=simple
+Type=oneshot
+RemainAfterExit=yes
+# Pre-start: pastikan direktori runtime xray ada dan owner-nya benar.
 ExecStartPre=-/usr/bin/mkdir -p /var/run/xray
 ExecStart=/usr/bin/chown www-data:www-data /var/run/xray
-Restart=on-abort
+# Post-start: (1) inject "tag" ke /etc/xray/config.json kalau belum ada
+# (server lama yg upgrade tanpa reinstall). Idempoten. Hanya berdampak
+# setelah xray restart berikutnya — itu OK karena migrate cuma jalan
+# saat boot. (2) Sync user dari .db files ke runtime Xray via gRPC API
+# supaya semua akun aktif setelah reboot tanpa harus tunggu user lain
+# trigger reload. xyz-xray-sync menunggu API ready (max ~30s).
+ExecStartPost=-/usr/local/sbin/xyz-xray-tag-migrate /etc/xray/config.json
+ExecStartPost=-/usr/local/sbin/xyz-xray-sync
 
 [Install]
 WantedBy=multi-user.target

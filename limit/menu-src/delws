@@ -74,8 +74,8 @@ rm -f "/etc/vmess/$user"
 rm -f "/etc/kyt/limit/vmess/ip/$user"
 rm -f "/var/www/html/vmess-$user.txt"
 
+/usr/local/sbin/xyz-xray-user del vmess "$user" >/dev/null 2>&1
 /usr/local/sbin/xyz-disconnect-user "$user" vmess >/dev/null 2>&1
-systemctl reload xray >/dev/null 2>&1
 
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"

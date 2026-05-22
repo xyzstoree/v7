@@ -75,9 +75,10 @@ rm -f "/etc/vless/$user"
 rm -f "/etc/kyt/limit/vless/ip/$user"
 rm -f "/var/www/html/vless-$user.txt"
 
-# Putus paksa koneksi aktif TANPA me-restart xray (user lain tidak terganggu)
+# Putus paksa koneksi aktif TANPA me-restart xray (user lain tidak terganggu).
+# Order: API del dulu (matikan user di runtime), baru kick socket aktif (ss -K).
+/usr/local/sbin/xyz-xray-user del vless "$user" >/dev/null 2>&1
 /usr/local/sbin/xyz-disconnect-user "$user" vless >/dev/null 2>&1
-systemctl reload xray > /dev/null 2>&1
 
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"

@@ -87,7 +87,8 @@ if [ -f /etc/trojan/.trojan.db ]; then
     sed -i -E "s|^### ${u_esc} ${e_esc} ([^ ]+) [^ ]+ [^ ]+\$|### $user $exp4 \\1 ${Quota} ${iplim}|" /etc/trojan/.trojan.db
 fi
 
-systemctl reload xray > /dev/null 2>&1
+# Renew = cuma update tanggal/quota. UUID/password tidak berubah, runtime
+# user state Xray tetap valid → tidak perlu reload/restart.
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 echo " Trojan Account Was Successfully Renewed"

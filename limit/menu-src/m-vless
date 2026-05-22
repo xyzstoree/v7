@@ -71,8 +71,10 @@ modify_uuid_vless() {
     sed -i '/#vlessgrpc$/a\//vl '"$user $exp"'\
 },{"id": "'""$new_uuid""'","email": "'""$user""'"' /etc/xray/config.json
     sed -i -E "s|^### ${u_esc} ${e_esc} .*|### $user $exp $new_uuid ${quota:-0} ${iplimit:-0}|" /etc/vless/.vless.db
-    /usr/local/sbin/xyz-disconnect-user "$user" vless >/dev/null 2>&1
-    systemctl reload xray >/dev/null 2>&1
+    # Change UUID: rm runtime user lama, add yg baru, kick socket aktif (zero-drop).
+    /usr/local/sbin/xyz-xray-user del vless "$user"             >/dev/null 2>&1
+    /usr/local/sbin/xyz-xray-user add vless "$user" "$new_uuid" >/dev/null 2>&1
+    /usr/local/sbin/xyz-disconnect-user "$user" vless           >/dev/null 2>&1
     echo -e "${GREEN}UUID VLESS untuk ${user} berhasil diubah.${NC}"
     sleep 1
     m-vless
@@ -100,8 +102,9 @@ lock_vless() {
         return
     fi
     sed -i "/^\/\/vl ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json
+    # Lock: rm runtime user via API + kick socket aktif (zero-drop user lain).
+    /usr/local/sbin/xyz-xray-user del vless "$user" >/dev/null 2>&1
     /usr/local/sbin/xyz-disconnect-user "$user" vless >/dev/null 2>&1
-    systemctl reload xray >/dev/null 2>&1
     echo -e "${GREEN}User VLESS ${user} berhasil di-lock.${NC}"
     sleep 1
     m-vless
@@ -133,7 +136,8 @@ unlock_vless() {
 },{"id": "'""$uuid""'","email": "'""$user""'"' /etc/xray/config.json
     sed -i '/#vlessgrpc$/a\//vl '"$user $exp"'\
 },{"id": "'""$uuid""'","email": "'""$user""'"' /etc/xray/config.json
-    systemctl reload xray >/dev/null 2>&1
+    # Unlock: aktifkan kembali user di runtime via API (zero-drop).
+    /usr/local/sbin/xyz-xray-user add vless "$user" "$uuid" >/dev/null 2>&1
     echo -e "${GREEN}User VLESS ${user} berhasil di-unlock.${NC}"
     sleep 1
     m-vless

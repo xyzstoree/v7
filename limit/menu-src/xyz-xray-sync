@@ -1,0 +1,93 @@
+#!/bin/bash
+# xyz-xray-sync — Re-import semua user aktif (belum expired) dari .db files
+# ke Xray runtime via gRPC API.
+#
+# Tujuan:
+#   - Self-healing setelah xray restart / reboot supaya runtime state =
+#     persistent state (DB).
+#   - Backstop kalau ada drift (mis. xyz-xray-user gagal saat add tapi DB
+#     tetap ditulis).
+#
+# Dipanggil oleh:
+#   - runn.service (boot)
+#   - install.sh (sekali setelah xray pertama kali up)
+#   - manual: `xyz-xray-sync` setelah xray restart manual
+#
+# Idempoten: aman dipanggil berkali-kali. xyz-xray-user akan swallow error
+# "already exists".
+#
+# Skip user yang exp-nya sudah lewat (tidak boleh re-add user expired).
+
+set -u
+
+XRAY_BIN="${XRAY_BIN:-/usr/local/bin/xray}"
+[ -x "$XRAY_BIN" ] || XRAY_BIN="$(command -v xray 2>/dev/null || true)"
+
+XYZ_USER_BIN="${XYZ_USER_BIN:-/usr/local/sbin/xyz-xray-user}"
+
+if [ ! -x "$XYZ_USER_BIN" ]; then
+    [ -n "${XYZ_DEBUG:-}" ] && echo "[xyz-xray-sync] xyz-xray-user tidak ditemukan di $XYZ_USER_BIN" >&2
+    exit 0
+fi
+
+# Tunggu API siap (max ~30 detik). Setelah xray restart, API butuh waktu listen.
+wait_api() {
+    local i
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if [ -n "$XRAY_BIN" ] && [ -x "$XRAY_BIN" ] && \
+           "$XRAY_BIN" api stats --server=127.0.0.1:10000 \
+               -name "noop" >/dev/null 2>&1; then
+            return 0
+        fi
+        # statsquery selalu tersedia kalau API up, walau hasilnya kosong
+        if [ -n "$XRAY_BIN" ] && [ -x "$XRAY_BIN" ] && \
+           "$XRAY_BIN" api statsquery --server=127.0.0.1:10000 >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+today_epoch() { date +%s; }
+
+# Cek apakah exp (YYYY-MM-DD) belum lewat hari ini.
+not_expired() {
+    local exp_str="$1" exp_ep now_ep
+    [ -z "$exp_str" ] && return 1
+    exp_ep=$(date -d "$exp_str 23:59:59" +%s 2>/dev/null) || return 1
+    now_ep=$(today_epoch)
+    [ "$exp_ep" -ge "$now_ep" ]
+}
+
+sync_db() {
+    local proto="$1" db="$2"
+    [ -f "$db" ] || return 0
+    local prefix user exp uuid line
+    while IFS= read -r line; do
+        # Format DB: "### user exp uuid quota iplimit"
+        # SS DB sering hanya: "### user exp uuid quota" (5 kolom).
+        prefix=$(awk '{print $1}' <<<"$line")
+        [ "$prefix" = "###" ] || continue
+        user=$(awk '{print $2}' <<<"$line")
+        exp=$(awk  '{print $3}' <<<"$line")
+        uuid=$(awk '{print $4}' <<<"$line")
+        [ -z "$user" ] || [ -z "$uuid" ] && continue
+        not_expired "$exp" || continue
+        "$XYZ_USER_BIN" add "$proto" "$user" "$uuid" >/dev/null 2>&1 || true
+    done < "$db"
+}
+
+main() {
+    if ! wait_api; then
+        [ -n "${XYZ_DEBUG:-}" ] && echo "[xyz-xray-sync] API tidak siap, skip" >&2
+        exit 0
+    fi
+    sync_db vmess  /etc/vmess/.vmess.db
+    sync_db vless  /etc/vless/.vless.db
+    sync_db trojan /etc/trojan/.trojan.db
+    sync_db ss     /etc/shadowsocks/.shadowsocks.db
+    exit 0
+}
+
+main "$@"

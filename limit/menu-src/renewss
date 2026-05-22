@@ -71,7 +71,8 @@ if [ -f /etc/shadowsocks/.shadowsocks.db ]; then
     sed -i -E "s|^### ${u_esc} ${e_esc} (.*)\$|### $user $exp4 \\1|" /etc/shadowsocks/.shadowsocks.db
 fi
 
-systemctl reload xray > /dev/null 2>&1
+# Renew = cuma update tanggal. Password tidak berubah, runtime user state
+# di Xray tetap valid → tidak perlu reload/restart.
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 echo " Shadowsocks Account Was Successfully Renewed"

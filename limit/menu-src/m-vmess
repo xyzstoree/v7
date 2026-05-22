@@ -58,8 +58,10 @@ function lock() {
             else
                 # Hapus dari xray config dengan prefix //vm yang BENAR (bukan ###)
                 sed -i "/^\/\/vm ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json
+                # Lock = matikan user di runtime via API, lalu kick socket
+                # aktif. Tidak pakai reload xray (zero-drop user lain).
+                /usr/local/sbin/xyz-xray-user del vmess "$user" >/dev/null 2>&1
                 /usr/local/sbin/xyz-disconnect-user "$user" vmess >/dev/null 2>&1
-                systemctl reload xray >/dev/null 2>&1
             fi
 
             clear
@@ -117,7 +119,8 @@ else
 },{"id": "'""$uuid""'","alterId": '"0"',"email": "'""$user""'"' /etc/xray/config.json
     sed -i '/#vmessgrpc$/a\//vm '"$user $exp"'\
 },{"id": "'""$uuid""'","alterId": '"0"',"email": "'""$user""'"' /etc/xray/config.json
-    systemctl reload xray > /dev/null 2>&1
+    # Unlock = aktifkan kembali user di runtime via API (zero-drop).
+    /usr/local/sbin/xyz-xray-user add vmess "$user" "$uuid" >/dev/null 2>&1
     clear
     echo -e "$COLOR1┌─────────────────────────────────────────────────┐${NC}"
     echo -e "$COLOR1│${NC} ${COLBG1}             • UNLOCKED XRAY USER •          ${NC} $COLOR1│$NC"
@@ -182,8 +185,11 @@ sed -i '/#vmessgrpc$/a\//vm '"$user $exp"'\
 # Update DB juga supaya unlock berikutnya pakai uuid baru
 sed -i -E "s|^### ${u_esc} ${e_esc} [^ ]+ |### $user $exp $uuid |" /etc/vmess/.vmess.db
 
-/usr/local/sbin/xyz-disconnect-user "$user" vmess >/dev/null 2>&1
-systemctl reload xray >/dev/null 2>&1
+# Change UUID: rm runtime user lama, add yg baru, kick socket aktif supaya
+# client reconnect dengan UUID baru. Zero-drop untuk user lain.
+/usr/local/sbin/xyz-xray-user del vmess "$user"           >/dev/null 2>&1
+/usr/local/sbin/xyz-xray-user add vmess "$user" "$uuid"   >/dev/null 2>&1
+/usr/local/sbin/xyz-disconnect-user "$user" vmess         >/dev/null 2>&1
 
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"

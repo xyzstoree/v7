@@ -87,7 +87,8 @@ if [ -f /etc/vmess/.vmess.db ]; then
     sed -i -E "s|^### ${u_esc} ${e_esc} ([^ ]+) [^ ]+ [^ ]+\$|### $user $exp4 \\1 ${Quota} ${iplim}|" /etc/vmess/.vmess.db
 fi
 
-systemctl reload xray > /dev/null 2>&1
+# Renew = cuma update tanggal/quota. UUID tidak berubah, runtime user state
+# di Xray tetap valid → tidak perlu reload/restart.
 clear
 echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 echo " VMESS Account Was Successfully Renewed"

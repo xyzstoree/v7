@@ -173,8 +173,11 @@ vmess_base643=$( base64 -w 0 <<< $vmess_json3)
 vmesslink1="vmess://$(echo $asu | base64 -w 0)"
 vmesslink2="vmess://$(echo $ask | base64 -w 0)"
 vmesslink3="vmess://$(echo $grpc | base64 -w 0)"
-systemctl reload xray > /dev/null 2>&1
-# (Hapus `service cron restart` — tidak relevan untuk add user.)
+# Aktifkan user secara LIVE via Xray gRPC API (HandlerService).
+# Tidak ada `systemctl reload xray` lagi: koneksi user lain tetap nyala.
+# config.json + .vmess.db tetap ditulis di atas/di bawah untuk persistence
+# setelah xray restart / reboot (di-rehydrate oleh xyz-xray-sync).
+/usr/local/sbin/xyz-xray-user add vmess "$user" "$uuid" >/dev/null 2>&1
 
 
 cat >/var/www/html/vmess-$user.txt <<-END

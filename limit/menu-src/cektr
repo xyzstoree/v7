@@ -25,8 +25,8 @@ GreenBe="\033[5;32m"
 YellowBe="\033[5;33m"
 BlueBe="\033[5;34m"
 nama=$(cat /usr/bin/user)
-echo -n > /var/log/xray/access.log
-systemctl reload xray
+# Reset access log untuk reset hitungan IP unik per user (tanpa restart xray).
+truncate -s 0 /var/log/xray/access.log 2>/dev/null
 sleep 5
 
 

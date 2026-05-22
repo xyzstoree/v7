@@ -201,7 +201,8 @@ ${vlesslink3}
 ◇━━━━━━━━━━━━━━━━━◇
 END
 
-systemctl reload xray
+# Aktifkan user secara LIVE via Xray gRPC API. Zero-drop untuk user lain.
+/usr/local/sbin/xyz-xray-user add vless "$user" "$uuid" >/dev/null 2>&1
 /usr/local/sbin/xyz-disconnect-user "$user" vless >/dev/null 2>&1
 if [ ! -e /etc/vless ]; then
   mkdir -p /etc/vless

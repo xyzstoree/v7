@@ -68,8 +68,10 @@ modify_uuid_trojan() {
     sed -i '/#trojangrpc$/a\//tr '"$user $exp"'\
 },{"password": "'""$new_uuid""'","email": "'""$user""'"' /etc/xray/config.json
     sed -i -E "s|^### ${u_esc} ${e_esc} .*|### $user $exp $new_uuid ${quota:-0} ${iplimit:-0}|" /etc/trojan/.trojan.db
-    /usr/local/sbin/xyz-disconnect-user "$user" trojan >/dev/null 2>&1
-    systemctl reload xray >/dev/null 2>&1
+    # Change password: rm runtime user lama, add yg baru, kick socket aktif (zero-drop).
+    /usr/local/sbin/xyz-xray-user del trojan "$user"             >/dev/null 2>&1
+    /usr/local/sbin/xyz-xray-user add trojan "$user" "$new_uuid" >/dev/null 2>&1
+    /usr/local/sbin/xyz-disconnect-user "$user" trojan           >/dev/null 2>&1
     echo -e "${GREEN}UUID TROJAN untuk ${user} berhasil diubah.${NC}"
     sleep 1
     m-trojan
@@ -96,8 +98,9 @@ lock_trojan() {
         return
     fi
     sed -i "/^\/\/tr ${u_esc} ${e_esc}\$/,/^},{/d" /etc/xray/config.json
+    # Lock: rm runtime user via API + kick socket aktif (zero-drop user lain).
+    /usr/local/sbin/xyz-xray-user del trojan "$user" >/dev/null 2>&1
     /usr/local/sbin/xyz-disconnect-user "$user" trojan >/dev/null 2>&1
-    systemctl reload xray >/dev/null 2>&1
     echo -e "${GREEN}User TROJAN ${user} berhasil di-lock.${NC}"
     sleep 1
     m-trojan
@@ -128,7 +131,8 @@ unlock_trojan() {
 },{"password": "'""$uuid""'","email": "'""$user""'"' /etc/xray/config.json
     sed -i '/#trojangrpc$/a\//tr '"$user $exp"'\
 },{"password": "'""$uuid""'","email": "'""$user""'"' /etc/xray/config.json
-    systemctl reload xray >/dev/null 2>&1
+    # Unlock: aktifkan kembali user di runtime via API (zero-drop).
+    /usr/local/sbin/xyz-xray-user add trojan "$user" "$uuid" >/dev/null 2>&1
     echo -e "${GREEN}User TROJAN ${user} berhasil di-unlock.${NC}"
     sleep 1
     m-trojan

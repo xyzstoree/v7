@@ -84,8 +84,8 @@ sed -i '/#trojanws$/a\//tr '"$user $exp"'\
 },{"password": "'""$uuid""'","email": "'""$user""'"' /etc/xray/config.json
 sed -i '/#trojangrpc$/a\//tr '"$user $exp"'\
 },{"password": "'""$uuid""'","email": "'""$user""'"' /etc/xray/config.json
-# Link Trojan Akun
-systemctl reload xray
+# Link Trojan Akun — aktifkan via API (zero-drop), tidak ada reload xray.
+/usr/local/sbin/xyz-xray-user add trojan "$user" "$uuid" >/dev/null 2>&1
 /usr/local/sbin/xyz-disconnect-user "$user" trojan >/dev/null 2>&1
 trojanlink1="trojan://${uuid}@${domain}:443?mode=gun&security=tls&type=grpc&serviceName=trojan-grpc&sni=${domain}#${user}"
 trojanlink="trojan://${uuid}@${domain}:443?path=%2Ftrojan-ws&security=tls&host=${domain}&type=ws&sni=${domain}#${user}"

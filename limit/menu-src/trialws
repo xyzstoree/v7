@@ -136,7 +136,8 @@ vmess_base643=$( base64 -w 0 <<< $vmess_json3)
 vmesslink1="vmess://$(echo $asu | base64 -w 0)"
 vmesslink2="vmess://$(echo $ask | base64 -w 0)"
 vmesslink3="vmess://$(echo $grpc | base64 -w 0)"
-systemctl reload xray
+# Aktifkan user secara LIVE via Xray gRPC API. Zero-drop untuk user lain.
+/usr/local/sbin/xyz-xray-user add vmess "$user" "$uuid" >/dev/null 2>&1
 /usr/local/sbin/xyz-disconnect-user "$user" vmess >/dev/null 2>&1
 # (Hapus `service cron restart` — tidak perlu, atd-lah yang melayani job `at`.)
 

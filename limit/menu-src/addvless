@@ -284,7 +284,8 @@ ${vlesslink3}
 
 END
 
-systemctl reload xray
+# Aktifkan user secara LIVE via Xray gRPC API. Zero-drop untuk user lain.
+/usr/local/sbin/xyz-xray-user add vless "$user" "$uuid" >/dev/null 2>&1
 clear
 echo -e ""
 echo -e "\033[0;34m◇━━━━━━━━━━━━━━━━━◇\033[0m"

@@ -12,7 +12,7 @@
 #   2. Hapus baris ### dari DB (/etc/{vless,trojan,vmess,shadowsocks}/.X.db).
 #   3. Hapus file pendukung (limit IP, quota, html).
 #   4. Force-disconnect socket aktif via xyz-disconnect-user (ss -K).
-#   5. systemctl reload xray.
+#   5. xyz-xray-user del — rm user dari runtime Xray via gRPC API (zero-drop).
 
 proto="$1"
 user="$2"
@@ -118,9 +118,10 @@ fi
 #    aman dijalankan (idempoten).
 /usr/local/sbin/xyz-disconnect-user "$user" "$proto" >/dev/null 2>&1
 
-# 6. Reload xray (refresh user table). Skip untuk SSH (tidak relevan).
+# 6. Matikan user di runtime Xray via gRPC API (zero-drop user lain).
+#    Skip untuk SSH (tidak ada inbound xray).
 if [ "$proto" != "ssh" ]; then
-    systemctl reload xray >/dev/null 2>&1
+    /usr/local/sbin/xyz-xray-user del "$proto" "$user" >/dev/null 2>&1
 fi
 
 exit 0

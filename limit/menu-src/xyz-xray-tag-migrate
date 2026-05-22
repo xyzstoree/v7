@@ -1,0 +1,151 @@
+#!/bin/bash
+# xyz-xray-tag-migrate — Inject field "tag" ke setiap inbound vmess/vless/
+# trojan/shadowsocks di /etc/xray/config.json, supaya `xray api adu/rmu`
+# bisa menarget inbound dengan tepat.
+#
+# Server existing yang sudah pakai versi lama (tanpa tag) akan otomatis
+# di-upgrade saat boot (via runn.service / setelah update.sh).
+#
+# Idempoten: kalau tag sudah ada (atau marker tidak match), skip silently.
+# Tidak panggil systemctl reload xray sendiri — kalau ada perubahan, caller
+# yang putuskan (biasanya cuma efektif setelah xray restart, dan itu OK
+# karena migrate hanya jalan saat boot).
+#
+# Detection:
+#   - Marker //#vless / //#vmess / //#trojanws / //#ssws (WS)
+#   - Marker //#vlessgrpc / //#vmessgrpc / //#trojangrpc / //#ssgrpc (gRPC)
+#   - Tag di-inject pada baris yang berisi `"protocol": "<proto>"` di blok
+#     inbound yang mengandung marker terkait.
+
+set -u
+
+CONF="${1:-/etc/xray/config.json}"
+[ -f "$CONF" ] || exit 0
+
+# Backup once per day (rotate manual cleanup)
+backup="${CONF}.bak.$(date +%Y%m%d)"
+[ -f "$backup" ] || cp -p "$CONF" "$backup" 2>/dev/null
+
+# Daftar (marker, tag) untuk setiap inbound. Marker adalah komentar JSONC
+# yang sudah ada di template repo ini.
+declare -A MAP=(
+    ["#vless"]="vless-ws-in"
+    ["#vmess"]="vmess-ws-in"
+    ["#trojanws"]="trojan-ws-in"
+    ["#ssws"]="ss-ws-in"
+    ["#vlessgrpc"]="vless-grpc-in"
+    ["#vmessgrpc"]="vmess-grpc-in"
+    ["#trojangrpc"]="trojan-grpc-in"
+    ["#ssgrpc"]="ss-grpc-in"
+)
+
+# Untuk tiap marker: cari blok inbound yang mengandung marker tersebut,
+# lalu kalau di blok itu belum ada baris `"tag":`, sisipkan setelah baris
+# `"protocol":`. Pakai awk supaya operasi atomik per file.
+
+inject_one() {
+    local marker="$1" tag="$2"
+    # Cek apakah tag ini sudah ada di file (idempoten check).
+    if grep -qE "\"tag\":[[:space:]]*\"${tag}\"" "$CONF"; then
+        return 0
+    fi
+    # Cek apakah marker memang ada (server tidak pakai inbound ini).
+    if ! grep -qF "${marker}" "$CONF"; then
+        return 0
+    fi
+
+    # awk: scan inbound blocks delimited by `{ ... },` di dalam array
+    # "inbounds". Strategi sederhana: lacak depth brace, identifikasi blok
+    # inbound (depth 2 dari root inbounds[]), kalau di blok itu match
+    # marker, sisipkan "tag" setelah baris "protocol":.
+    local tmp
+    tmp=$(mktemp /tmp/xyz-tagmig.XXXXXX) || return 0
+    awk -v marker="$marker" -v tag="$tag" '
+    BEGIN { in_inbounds=0; depth=0; block_start=0; block_buf=""; block_has_marker=0 }
+    {
+        line=$0
+        # Track entering "inbounds": [
+        if (in_inbounds==0 && line ~ /"inbounds"[[:space:]]*:[[:space:]]*\[/) {
+            in_inbounds=1; print line; next
+        }
+        if (in_inbounds==0) { print line; next }
+
+        # In inbounds array. Closing of array
+        if (line ~ /^[[:space:]]*\][[:space:]]*,?[[:space:]]*$/ && depth==0) {
+            in_inbounds=0; print line; next
+        }
+
+        # Detect block start: an opening brace at depth 0
+        if (depth==0 && line ~ /\{/) {
+            block_start=1; depth=1; block_buf=line "\n"
+            if (index(line, marker)>0) block_has_marker=1
+            # account for additional braces on same line
+            n_open = gsub(/\{/, "{", line)
+            n_close = gsub(/\}/, "}", line)
+            depth = depth - 1 + n_open - n_close
+            if (depth<0) depth=0
+            next
+        }
+
+        if (block_start==1) {
+            block_buf = block_buf line "\n"
+            if (index(line, marker)>0) block_has_marker=1
+            n_open = gsub(/\{/, "{", line)
+            n_close = gsub(/\}/, "}", line)
+            depth += n_open - n_close
+            if (depth<=0) {
+                # Block ended
+                if (block_has_marker==1) {
+                    # Inject "tag" after the "protocol": line, if block has no tag yet
+                    if (block_buf !~ /"tag"[[:space:]]*:/) {
+                        # insertion: after first line containing "protocol":
+                        n=split(block_buf, lines, "\n")
+                        injected=0
+                        for (i=1;i<=n;i++) {
+                            print lines[i]
+                            if (!injected && lines[i] ~ /"protocol"[[:space:]]*:/) {
+                                # Match indentation of protocol line
+                                indent=lines[i]
+                                sub(/[^ \t].*$/, "", indent)
+                                printf "%s\"tag\": \"%s\",\n", indent, tag
+                                injected=1
+                            }
+                        }
+                    } else {
+                        printf "%s", block_buf
+                    }
+                } else {
+                    printf "%s", block_buf
+                }
+                block_start=0; block_has_marker=0; block_buf=""; depth=0
+            }
+            next
+        }
+
+        print line
+    }
+    ' "$CONF" > "$tmp" 2>/dev/null
+
+    # Validasi: hasil tidak boleh kosong / shrink drastis (>10%).
+    if [ -s "$tmp" ]; then
+        local old_size new_size
+        old_size=$(wc -c <"$CONF")
+        new_size=$(wc -c <"$tmp")
+        if [ "$new_size" -ge $((old_size - old_size / 10)) ]; then
+            mv "$tmp" "$CONF"
+            return 0
+        fi
+    fi
+    rm -f "$tmp"
+    return 0
+}
+
+main() {
+    local marker
+    for marker in "${!MAP[@]}"; do
+        inject_one "$marker" "${MAP[$marker]}"
+    done
+    exit 0
+}
+
+main "$@"

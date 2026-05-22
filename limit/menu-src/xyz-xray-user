@@ -1,0 +1,142 @@
+#!/bin/bash
+# xyz-xray-user — wrapper add/remove user di Xray secara LIVE via gRPC API
+# (HandlerService) sehingga koneksi user lain TIDAK ikut terputus.
+#
+# Pengganti pola lama "edit config.json + systemctl reload xray".
+# Setelah skrip ini sukses, akun langsung aktif/non-aktif tanpa restart.
+#
+# Usage:
+#   xyz-xray-user add <vmess|vless|trojan|ss> <user> <secret>
+#       secret = uuid (vmess/vless/trojan) atau password (ss)
+#   xyz-xray-user del <vmess|vless|trojan|ss> <user>
+#
+# Loop ke semua inbound tag untuk protokol terkait (WS + gRPC).
+# Idempoten: error "user already exists" / "user not found" di-swallow
+# karena saling memanggil dgn skrip lama yang juga edit config.json.
+#
+# Konfigurasi:
+#   XRAY_API_SERVER  — default 127.0.0.1:10000 (override via env)
+#
+# Exit code:
+#   0  — semua tag sukses (atau error idempoten)
+#   1  — argumen invalid
+#   2  — xray binary tidak ditemukan / API tidak reachable
+#   tidak pernah non-zero karena idempoten — supaya skrip pemanggil
+#   tidak gagal kalau user sudah ada/sudah tidak ada.
+
+set -u
+
+XRAY_API_SERVER="${XRAY_API_SERVER:-127.0.0.1:10000}"
+XRAY_BIN="${XRAY_BIN:-/usr/local/bin/xray}"
+[ -x "$XRAY_BIN" ] || XRAY_BIN="$(command -v xray 2>/dev/null || true)"
+
+# Tag mapping per protokol. Urutan penting: WS dulu lalu gRPC.
+tags_for_proto() {
+    case "$1" in
+        vmess)  echo "vmess-ws-in vmess-grpc-in" ;;
+        vless)  echo "vless-ws-in vless-grpc-in" ;;
+        trojan) echo "trojan-ws-in trojan-grpc-in" ;;
+        ss)     echo "ss-ws-in ss-grpc-in" ;;
+        *)      return 1 ;;
+    esac
+}
+
+# Bangun JSON entry user untuk satu protokol.
+# Argumen: <proto> <email> <secret>
+# Output ke stdout: JSON object satu baris.
+build_user_json() {
+    local proto="$1" email="$2" secret="$3"
+    case "$proto" in
+        vmess)
+            printf '{"email":"%s","level":0,"alterId":0,"security":"auto","id":"%s"}' \
+                "$email" "$secret"
+            ;;
+        vless)
+            printf '{"email":"%s","level":0,"id":"%s","encryption":"none","flow":""}' \
+                "$email" "$secret"
+            ;;
+        trojan)
+            printf '{"email":"%s","level":0,"password":"%s"}' \
+                "$email" "$secret"
+            ;;
+        ss)
+            # Password user; method ikut server-level (aes-128-gcm) yang sudah
+            # ter-set di config inbound. xray-core menerima per-user password
+            # untuk SS multi-user.
+            printf '{"email":"%s","level":0,"password":"%s","method":"aes-128-gcm"}' \
+                "$email" "$secret"
+            ;;
+    esac
+}
+
+# Panggil xray api adu/rmu untuk satu inbound tag.
+# Argumen: <op:add|del> <tag> <proto> <user> [secret]
+api_call_one() {
+    local op="$1" tag="$2" proto="$3" user="$4" secret="${5:-}"
+    local tmp out rc
+    tmp=$(mktemp /tmp/xyz-xray-user.XXXXXX.json) || return 0
+    if [ "$op" = "add" ]; then
+        printf '{"tag":"%s","users":[%s]}\n' \
+            "$tag" "$(build_user_json "$proto" "$user" "$secret")" \
+            > "$tmp"
+        out=$("$XRAY_BIN" api adu --server="$XRAY_API_SERVER" "$tmp" 2>&1); rc=$?
+    else
+        printf '{"tag":"%s","users":[{"email":"%s"}]}\n' "$tag" "$user" \
+            > "$tmp"
+        out=$("$XRAY_BIN" api rmu --server="$XRAY_API_SERVER" "$tmp" 2>&1); rc=$?
+    fi
+    rm -f "$tmp"
+
+    # Idempoten: swallow "already exists" (add) & "not found" (del).
+    if [ $rc -ne 0 ]; then
+        case "$out" in
+            *"already exists"*|*"not found"*|*"User "*" not found"*) rc=0 ;;
+        esac
+    fi
+    if [ $rc -ne 0 ] && [ -n "${XYZ_DEBUG:-}" ]; then
+        echo "[xyz-xray-user] $op tag=$tag user=$user rc=$rc out=$out" >&2
+    fi
+    return 0
+}
+
+main() {
+    local op="${1:-}" proto="${2:-}" user="${3:-}" secret="${4:-}"
+    [ -z "$op" ] || [ -z "$proto" ] || [ -z "$user" ] && {
+        cat >&2 <<'USAGE'
+Usage:
+  xyz-xray-user add <vmess|vless|trojan|ss> <user> <secret>
+  xyz-xray-user del <vmess|vless|trojan|ss> <user>
+USAGE
+        exit 1
+    }
+    case "$op" in add|del) ;; *) echo "op harus add atau del" >&2; exit 1 ;; esac
+    case "$user" in
+        *[!a-zA-Z0-9_.@-]*|''|'.'|'..'|*'/'*)
+            echo "username invalid" >&2; exit 1 ;;
+    esac
+
+    if [ -z "$XRAY_BIN" ] || ! [ -x "$XRAY_BIN" ]; then
+        # Tidak ada xray binary → tidak bisa API. Skrip pemanggil yang lain
+        # masih akan menulis config.json + DB sehingga akun aktif setelah
+        # xray di-restart manual.
+        [ -n "${XYZ_DEBUG:-}" ] && echo "[xyz-xray-user] xray binary tidak ditemukan" >&2
+        exit 2
+    fi
+
+    local tags
+    tags=$(tags_for_proto "$proto") || {
+        echo "proto invalid: $proto" >&2; exit 1
+    }
+
+    if [ "$op" = "add" ] && [ -z "$secret" ]; then
+        echo "secret (uuid/password) wajib untuk add" >&2; exit 1
+    fi
+
+    local t
+    for t in $tags; do
+        api_call_one "$op" "$t" "$proto" "$user" "$secret"
+    done
+    exit 0
+}
+
+main "$@"

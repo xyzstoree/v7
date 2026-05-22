@@ -1,6 +1,16 @@
 #!/bin/bash
 red() { echo -e "\\033[32;1m${*}\\033[0m"; }
 clear
+
+# Helper: hapus user di runtime Xray via gRPC API. Zero-drop user lain
+# (pengganti `systemctl reload xray` yang dulu dipanggil di akhir).
+XYZ_USER_BIN="/usr/local/sbin/xyz-xray-user"
+XYZ_DISCONNECT="/usr/local/sbin/xyz-disconnect-user"
+xp_kick() {
+    [ -x "$XYZ_USER_BIN" ] && "$XYZ_USER_BIN" del "$1" "$2" >/dev/null 2>&1
+    [ -x "$XYZ_DISCONNECT" ] && "$XYZ_DISCONNECT" "$2" "$1" >/dev/null 2>&1
+}
+
 ##----- Auto Remove Vmess
 data=($(cat /etc/xray/config.json | grep '^//vm' | cut -d ' ' -f 2 | sort | uniq))
 now=$(date +"%Y-%m-%d")
@@ -12,6 +22,7 @@ for user in "${data[@]}"; do
     if [[ "$exp2" -le "0" ]]; then
         sed -i "/^\/\/vm $user $exp/,/^},{/d" /etc/xray/config.json
         sed -i "/^\/\/vm $user $exp/,/^},{/d" /etc/xray/config.json
+        xp_kick vmess "$user"
     fi
 done
 
@@ -26,6 +37,7 @@ for user in "${data[@]}"; do
     if [[ "$exp2" -le "0" ]]; then
         sed -i "/^\/\/vl $user $exp/,/^},{/d" /etc/xray/config.json
         sed -i "/^\/\/vl $user $exp/,/^},{/d" /etc/xray/config.json
+        xp_kick vless "$user"
     fi
 done
 
@@ -40,6 +52,7 @@ for user in "${data[@]}"; do
     if [[ "$exp2" -le "0" ]]; then
         sed -i "/^\/\/tr $user $exp/,/^},{/d" /etc/xray/config.json
         sed -i "/^\/\/tr $user $exp/,/^},{/d" /etc/xray/config.json
+        xp_kick trojan "$user"
     fi
 done
 
@@ -54,9 +67,11 @@ for user in "${data[@]}"; do
     if [[ "$exp2" -le "0" ]]; then
         sed -i "/^\/\/ss $user $exp/,/^},{/d" /etc/xray/config.json
         sed -i "/^\/\/ss $user $exp/,/^},{/d" /etc/xray/config.json
+        xp_kick ss "$user"
     fi
 done
-systemctl reload xray
+# (Hapus `systemctl reload xray` di akhir — semua user expired sudah
+# di-kick via API per-user di atas, koneksi user lain tidak terganggu.)
 
 ##------ Auto Remove SSH
 hariini=$(date +%d-%m-%Y)
