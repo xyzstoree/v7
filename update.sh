@@ -64,11 +64,31 @@ res1() {
     sudo dos2unix /usr/local/sbin/* 2>/dev/null || true
     rm -rf menu menu.zip update.sh
 
-    # Helper Xray gRPC API user-management + recovery script.
-    for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate xyz-recovery; do
-        wget --timeout=30 --tries=2 -q -O /usr/local/sbin/$h \
-            "https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu-src/$h"
-        chmod +x /usr/local/sbin/$h 2>/dev/null
+    # =====================================================================
+    # OVERRIDE skrip user-management dari menu-src/ langsung. menu.zip di
+    # repo ini binary yang di-build manual — versi skrip di dalamnya BISA
+    # JADI lebih tua daripada source di limit/menu-src/. Ini yg bikin
+    # laporan "VPN tetep stop saat add account": skrip lama di menu.zip
+    # masih panggil `systemctl reload xray`, dan dengan ExecReload yang
+    # baru, reload jadi kirim HUP -> xray exit -> restart -> drop koneksi.
+    #
+    # Override ini pastikan skrip yg dipakai = versi terbaru di GitHub
+    # source (yang udah dimigrate ke gRPC API, zero-drop).
+    # =====================================================================
+    REPO_RAW="https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu-src"
+    OVERRIDE_LIST=(
+        xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate xyz-recovery
+        addws addvless addtr addss
+        delws delvless deltr delss
+        renewws renewvless renewtr renewss
+        trialws trialvless trialtr trialss
+        m-vmess m-vless m-trojan
+        xyz-trial-cleanup xp cektr
+    )
+    for f in "${OVERRIDE_LIST[@]}"; do
+        wget --timeout=30 --tries=2 -q -O "/usr/local/sbin/$f" \
+            "${REPO_RAW}/$f" 2>/dev/null
+        chmod +x "/usr/local/sbin/$f" 2>/dev/null
     done
 
     # =====================================================================
@@ -130,10 +150,19 @@ res1() {
     ( sleep 5 ; [ -x /usr/local/sbin/xyz-xray-sync ] && \
         /usr/local/sbin/xyz-xray-sync >/dev/null 2>&1 ) &
 
-    # Update xray.service unit untuk set ExecReload (kalau belum ada).
-    if ! grep -q '^ExecReload=' /etc/systemd/system/xray.service 2>/dev/null; then
-        sed -i '/^ExecStart=.*xray run/a ExecReload=/bin/kill -HUP $MAINPID' \
-            /etc/systemd/system/xray.service
+    # =====================================================================
+    # HAPUS ExecReload kalau ada. Logika: skrip user-management baru udah
+    # pakai gRPC API (xyz-xray-user) bukan `systemctl reload xray` lagi.
+    # Tapi kalau ada skrip pihak ketiga / cron / hook yang masih panggil
+    # reload, dengan ExecReload=kill -HUP xray-core akan mati (gak handle
+    # HUP gracefully) -> systemd restart -> DROP koneksi.
+    #
+    # Tanpa ExecReload, `systemctl reload xray` akan return error sunyi
+    # (karena di-redirect ke /dev/null di hampir semua skrip lama).
+    # No restart, no drop -- sesuai harapan zero-drop.
+    # =====================================================================
+    if grep -q '^ExecReload=' /etc/systemd/system/xray.service 2>/dev/null; then
+        sed -i '/^ExecReload=/d' /etc/systemd/system/xray.service
         systemctl daemon-reload >/dev/null 2>&1
     fi
     # Auto-fix /etc/profile: hapus SEMUA referensi botapi.conf (baik yang

@@ -445,7 +445,6 @@ CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 ExecStart=/usr/local/bin/xray run -config /etc/xray/config.json
-ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
 RestartPreventExitStatus=23
 LimitNPROC=10000
@@ -805,12 +804,24 @@ mv -f menu/* /usr/local/sbin/
 dos2unix /usr/local/sbin/install-plugin 2>/dev/null
 rm -rf menu menu.zip update.sh
 
-# Helper Xray gRPC API user-management (zero-drop add/remove user, no
-# restart xray). Diambil langsung dari repo karena bisa jadi belum
-# ter-pack di menu.zip lama. Aman idempoten dijalankan ulang.
-for h in xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate xyz-recovery; do
-    wget -q -O /usr/local/sbin/$h "${REPO}limit/menu-src/$h"
-    chmod +x /usr/local/sbin/$h
+# Helper Xray gRPC API + override skrip user-management dari menu-src/.
+# menu.zip di repo binary manual yang versi-nya bisa lebih lama dari source
+# di limit/menu-src/ -> kalau cuma extract menu.zip, skrip add/del lama
+# tetap panggil reload xray dan bikin drop. Override pastikan skrip yang
+# dipakai = versi terbaru (zero-drop via gRPC API).
+REPO_RAW="${REPO}limit/menu-src"
+OVERRIDE_LIST=(
+    xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate xyz-recovery
+    addws addvless addtr addss
+    delws delvless deltr delss
+    renewws renewvless renewtr renewss
+    trialws trialvless trialtr trialss
+    m-vmess m-vless m-trojan
+    xyz-trial-cleanup xp cektr
+)
+for f in "${OVERRIDE_LIST[@]}"; do
+    wget -q -O "/usr/local/sbin/$f" "${REPO_RAW}/$f"
+    chmod +x "/usr/local/sbin/$f"
 done
 }
 function profile(){

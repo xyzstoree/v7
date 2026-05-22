@@ -1,21 +1,21 @@
 #!/bin/bash
-# xyz-recovery — Recovery cepat kalau xray offline.
+# xyz-recovery — Recovery + ensure zero-drop konfiguration.
 # Usage: bash xyz-recovery
 #       atau: bash <(curl -sL https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu-src/xyz-recovery)
 #
 # Aksi:
-#   1. Cek status xray.
-#   2. Cek backup tersedia.
-#   3. Validate config saat ini. Kalau valid syntax tapi ada permission
-#      issue (misalnya 0600 root-only — bug yang sempat ada di
-#      xyz-xray-tag-migrate versi pertama), auto-fix permission.
-#   4. Kalau config rusak, restore dari backup terbaru yang valid.
-#   5. Restart xray, verify aktif.
+#   1. Cek status xray + auto-fix permission/restore dari backup kalau perlu.
+#   2. HAPUS ExecReload dari xray.service (mencegah HUP-induced restart
+#      dari skrip lama yang masih panggil `systemctl reload xray`).
+#   3. OVERRIDE semua skrip user-management dari source repo (versi
+#      zero-drop) — supaya tidak bergantung pada menu.zip yang mungkin
+#      tertinggal.
 
 set -u
 CONF="/etc/xray/config.json"
 XRAY_BIN="${XRAY_BIN:-/usr/local/bin/xray}"
 [ -x "$XRAY_BIN" ] || XRAY_BIN="$(command -v xray 2>/dev/null || echo /usr/local/bin/xray)"
+REPO_RAW="https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu-src"
 
 restart_and_verify() {
     systemctl daemon-reload
@@ -23,7 +23,6 @@ restart_and_verify() {
     sleep 3
     if systemctl is-active --quiet xray; then
         echo "OK xray ACTIVE."
-        systemctl status xray --no-pager | head -8
         return 0
     fi
     echo "FAIL xray masih offline. Detail journalctl:"
@@ -31,84 +30,93 @@ restart_and_verify() {
     return 1
 }
 
-echo ">>> [1/5] Cek status xray sekarang..."
+ensure_zero_drop_config() {
+    echo ">>> Memastikan konfigurasi zero-drop..."
+    # 1. Hapus ExecReload — supaya `systemctl reload xray` jadi no-op
+    #    (return error tapi gak restart). Skrip lama yg masih panggil
+    #    reload tidak akan bikin drop.
+    if grep -q '^ExecReload=' /etc/systemd/system/xray.service 2>/dev/null; then
+        echo "    - Hapus ExecReload dari /etc/systemd/system/xray.service"
+        sed -i '/^ExecReload=/d' /etc/systemd/system/xray.service
+        systemctl daemon-reload
+    else
+        echo "    - ExecReload sudah tidak ada. OK."
+    fi
+
+    # 2. Override semua skrip user-management dari source repo. Pastikan
+    #    versi yg dipakai = source terbaru (sudah migrate ke gRPC API).
+    echo "    - Override skrip user-management dari ${REPO_RAW}..."
+    local OVERRIDE_LIST=(
+        xyz-xray-user xyz-xray-sync xyz-xray-tag-migrate
+        addws addvless addtr addss
+        delws delvless deltr delss
+        renewws renewvless renewtr renewss
+        trialws trialvless trialtr trialss
+        m-vmess m-vless m-trojan
+        xyz-trial-cleanup xp cektr
+    )
+    local ok=0 fail=0
+    for f in "${OVERRIDE_LIST[@]}"; do
+        if wget --timeout=30 --tries=2 -q -O "/usr/local/sbin/$f" \
+                "${REPO_RAW}/$f" 2>/dev/null; then
+            chmod +x "/usr/local/sbin/$f" 2>/dev/null
+            ok=$((ok+1))
+        else
+            fail=$((fail+1))
+        fi
+    done
+    echo "      Override: $ok ok, $fail gagal."
+}
+
+echo ">>> [1/4] Cek status xray sekarang..."
 systemctl status xray --no-pager 2>/dev/null | head -10
 echo ""
 
-echo ">>> [2/5] Cek backup tersedia..."
+echo ">>> [2/4] Cek backup tersedia..."
 LATEST_BAK=$(ls -t "${CONF}".bak.* 2>/dev/null | head -n1)
 if [ -n "$LATEST_BAK" ]; then
     echo "Backup ditemukan: $LATEST_BAK"
     ls -la "$LATEST_BAK"
 else
-    echo "Tidak ada backup di ${CONF}.bak.* — recovery hanya bisa fix"
-    echo "permission, tidak bisa restore content."
+    echo "Tidak ada backup di ${CONF}.bak.*"
 fi
 echo ""
 
-echo ">>> [3/5] Validate config saat ini..."
+echo ">>> [3/4] Validate config + permission..."
 if "$XRAY_BIN" test -config "$CONF" >/tmp/xyz-recovery.log 2>&1; then
-    echo "Config syntax VALID. Cek permission..."
-    # xray.service jalan sebagai www-data, bukan root. `xray test` di-run
-    # sebagai root jadi tidak akan ketauan kalau file 0600 root-only.
+    echo "Config syntax VALID."
     if ! sudo -u www-data test -r "$CONF" 2>/dev/null; then
         echo "PERMISSION ISSUE: user www-data tidak bisa baca $CONF"
         ls -la "$CONF"
         echo "Auto-fix: chmod 0644 + chown root:root..."
         chmod 0644 "$CONF"
         chown root:root "$CONF"
-        ls -la "$CONF"
-        echo ""
-        echo ">>> [5/5] Restart xray..."
-        if restart_and_verify; then
-            exit 0
-        fi
-    else
-        echo "Permission OK. Config seharusnya bisa di-load xray."
-        echo ""
-        echo ">>> [5/5] Restart xray..."
-        if restart_and_verify; then
-            exit 0
-        fi
     fi
 else
-    echo "Config saat ini INVALID. Detail error:"
+    echo "Config INVALID. Detail:"
     tail -n 15 /tmp/xyz-recovery.log
+    echo ""
+    if [ -n "$LATEST_BAK" ] && "$XRAY_BIN" test -config "$LATEST_BAK" >/dev/null 2>&1; then
+        echo "Restoring dari $LATEST_BAK..."
+        cp -p "$CONF" "${CONF}.broken.$(date +%Y%m%d-%H%M%S)" 2>/dev/null
+        cp -p "$LATEST_BAK" "$CONF"
+        chmod 0644 "$CONF"
+        chown root:root "$CONF"
+    else
+        echo "Tidak ada backup valid. Coba reinstall:"
+        echo "  bash <(curl -sL https://raw.githubusercontent.com/xyzstoree/v7/main/install.sh)"
+        exit 1
+    fi
 fi
 echo ""
 
-if [ -z "$LATEST_BAK" ]; then
-    echo "Tidak ada backup untuk restore. Coba reinstall:"
-    echo "  bash <(curl -sL https://raw.githubusercontent.com/xyzstoree/v7/main/install.sh)"
-    exit 1
-fi
-
-echo ">>> [4/5] Validate backup..."
-if "$XRAY_BIN" test -config "$LATEST_BAK" >/tmp/xyz-recovery.log 2>&1; then
-    echo "Backup VALID. Restoring..."
-    cp -p "$CONF" "${CONF}.broken.$(date +%Y%m%d-%H%M%S)" 2>/dev/null
-    cp -p "$LATEST_BAK" "$CONF"
-    chmod 0644 "$CONF"
-    chown root:root "$CONF"
-    echo "Config rusak disimpan ke ${CONF}.broken.* untuk debug nanti."
-else
-    echo "Backup juga INVALID. Detail:"
-    tail -n 15 /tmp/xyz-recovery.log
-    echo ""
-    echo "Cari backup lebih lama:"
-    ls -la "${CONF}".bak.* 2>/dev/null
-    echo ""
-    echo "Coba restore manual dari salah satu backup di atas:"
-    echo "  cp /etc/xray/config.json.bak.<TANGGAL> /etc/xray/config.json"
-    echo "  chmod 0644 /etc/xray/config.json"
-    echo "  chown root:root /etc/xray/config.json"
-    echo "  systemctl restart xray"
-    exit 1
-fi
+echo ">>> [4/4] Apply zero-drop config + restart..."
+ensure_zero_drop_config
 echo ""
-
-echo ">>> [5/5] Restart xray..."
 if restart_and_verify; then
+    echo ""
+    echo "Recovery selesai. xray jalan, ExecReload sudah dihapus, skrip"
+    echo "user-management sudah ditimpa dengan versi zero-drop."
     exit 0
 fi
 exit 1
