@@ -1,17 +1,25 @@
 #!/bin/bash
+# update (alias dari menu, di-deploy ke /usr/local/sbin/update)
+#
+# FIX (sama dengan update.sh top-level):
+#   - unzip tanpa -P → semua entry di-skip; folder menu/ kosong; mv gagal
+#     sunyi; bar progress jalan selamanya.
+#   - wget tanpa timeout → bisa hang.
+#   - Error ditelan oleh fun_bar → user tidak tahu apa yang salah.
 dateFromServer=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
 biji=`date +"%Y-%m-%d" -d "$dateFromServer"`
 red() { echo -e "\\033[32;1m${*}\\033[0m"; }
 clear
+ZIP_PASS='coding_sendiri_lah_goblok_cuman_bisa_nyuri'
+LOG=/tmp/xyz-update.log
+: >"$LOG"
 fun_bar() {
     CMD[0]="$1"
-    CMD[1]="$2"
     (
         [[ -e $HOME/fim ]] && rm $HOME/fim
-        ${CMD[0]} -y >/dev/null 2>&1
-        ${CMD[1]} -y >/dev/null 2>&1
+        ${CMD[0]}
         touch $HOME/fim
-    ) >/dev/null 2>&1 &
+    ) >>"$LOG" 2>&1 &
     tput civis
     echo -ne "  \033[0;33mPlease Wait Loading \033[1;37m- \033[0;33m["
     while true; do
@@ -30,14 +38,21 @@ fun_bar() {
     tput cnorm
 }
 res1() {
-    wget https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu.zip
-    unzip menu.zip
+    rm -rf menu menu.zip
+    wget --timeout=30 --tries=2 -q https://raw.githubusercontent.com/xyzstoree/v7/main/limit/menu.zip
+    if [ ! -s menu.zip ]; then
+        echo "FATAL: gagal download menu.zip dari GitHub" >&2
+        return 1
+    fi
+    unzip -o -P "$ZIP_PASS" -q menu.zip
+    if [ ! -d menu ] || [ -z "$(ls -A menu 2>/dev/null)" ]; then
+        echo "FATAL: extract menu.zip gagal — folder menu/ kosong (password salah?)" >&2
+        return 1
+    fi
     chmod +x menu/*
-    mv menu/* /usr/local/sbin
-    sudo dos2unix /usr/local/sbin/*
-    rm -rf menu
-    rm -rf menu.zip
-    rm -rf update.sh
+    mv -f menu/* /usr/local/sbin/
+    sudo dos2unix /usr/local/sbin/* 2>/dev/null || true
+    rm -rf menu menu.zip update.sh
     # Register welcome sebagai login script
     if [ -d /etc/profile.d ]; then
         echo '[ -x /usr/local/sbin/welcome ] && /usr/local/sbin/welcome' > /etc/profile.d/xyz-welcome.sh
@@ -52,6 +67,12 @@ echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━�
 echo -e ""
 echo -e "  \033[1;91m update script service\033[1;37m"
 fun_bar 'res1'
+if grep -q '^FATAL' "$LOG" 2>/dev/null; then
+    echo ""
+    echo -e "\033[0;31m  Update GAGAL. Detail error:\033[0m"
+    tail -n 20 "$LOG"
+    echo ""
+fi
 echo -e "\033[0;34m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
 echo -e ""
 read -n 1 -s -r -p "Press [ Enter ] to back on menu"
