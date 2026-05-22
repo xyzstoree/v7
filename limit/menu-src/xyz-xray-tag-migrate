@@ -185,7 +185,19 @@ inject_one() {
         return 0
     fi
 
-    mv "$tmp" "$CONF"
+    # Tulis konten ke CONF dengan PRESERVE permission/ownership target
+    # asli. Pakai `cat > file` (bukan `mv tmp file`) supaya inode tetap
+    # dan mode/owner file CONF tidak ikut berubah.
+    #
+    # Bug pre-fix: `mktemp` bikin file 0600 root-only, lalu `mv` ngeganti
+    # CONF dengan tmp → file akhir 0600 root → user xray (www-data)
+    # gak bisa baca → xray gagal start dengan "permission denied".
+    if ! cat "$tmp" > "$CONF" 2>/dev/null; then
+        [ -n "${XYZ_DEBUG:-}" ] && echo "[tag-migrate] $marker: gagal tulis ke $CONF" >&2
+        rm -f "$tmp"
+        return 0
+    fi
+    rm -f "$tmp"
     return 0
 }
 

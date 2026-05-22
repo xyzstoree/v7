@@ -103,6 +103,14 @@ res1() {
         fi
     fi
 
+    # Defensive: pastikan permission config.json bisa dibaca oleh user
+    # xray (www-data dari unit file). `xray test` jalan sebagai root jadi
+    # gak akan ketauan permission issue — tapi xray.service jalan sebagai
+    # www-data dan akan fail dengan "permission denied" kalau file 0600
+    # root-only. Set ke 0644 root:root supaya readable by all.
+    chmod 0644 /etc/xray/config.json 2>/dev/null
+    chown root:root /etc/xray/config.json 2>/dev/null
+
     # Restart xray. Kalau gagal start (config-related), rollback ke
     # backup pre-migrate dan coba lagi sekali.
     systemctl restart xray >/dev/null 2>&1
