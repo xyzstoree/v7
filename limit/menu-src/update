@@ -53,11 +53,11 @@ res1() {
     mv -f menu/* /usr/local/sbin/
     sudo dos2unix /usr/local/sbin/* 2>/dev/null || true
     rm -rf menu menu.zip update.sh
-    # Auto-fix /etc/profile yang punya `source /etc/botapi.conf` tanpa guard
-    # (bug versi lama plugin-lite). Ganti jadi guarded version supaya login
-    # tidak error "/etc/botapi.conf: No such file or directory".
-    if grep -qE '^[[:space:]]*(source|\.)[[:space:]]+/etc/botapi\.conf[[:space:]]*$' /etc/profile 2>/dev/null; then
-        sed -i -E '\|^[[:space:]]*(source|\.)[[:space:]]+/etc/botapi\.conf[[:space:]]*$|d' /etc/profile
+    # Auto-fix /etc/profile: hapus SEMUA referensi botapi.conf (baik yang
+    # unguarded `source ...` maupun duplikat guarded yang sudah numpuk dari
+    # run sebelumnya), lalu tambah satu baris guarded. Idempoten.
+    if [ -f /etc/profile ] && grep -q 'botapi\.conf' /etc/profile; then
+        sed -i '/botapi\.conf/d' /etc/profile
         echo '[ -r /etc/botapi.conf ] && . /etc/botapi.conf' >> /etc/profile
     fi
     # Register welcome sebagai login script
