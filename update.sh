@@ -63,6 +63,13 @@ res1() {
     mv -f menu/* /usr/local/sbin/
     sudo dos2unix /usr/local/sbin/* 2>/dev/null || true
     rm -rf menu menu.zip update.sh
+    # Auto-fix /etc/profile yang punya `source /etc/botapi.conf` tanpa guard
+    # (bug versi lama plugin-lite). Ganti jadi guarded version supaya login
+    # tidak error "/etc/botapi.conf: No such file or directory".
+    if grep -qE '^[[:space:]]*(source|\.)[[:space:]]+/etc/botapi\.conf[[:space:]]*$' /etc/profile 2>/dev/null; then
+        sed -i -E '\|^[[:space:]]*(source|\.)[[:space:]]+/etc/botapi\.conf[[:space:]]*$|d' /etc/profile
+        echo '[ -r /etc/botapi.conf ] && . /etc/botapi.conf' >> /etc/profile
+    fi
     # Hapus profile.d lama biar ga double
     rm -f /etc/profile.d/xyz-welcome.sh
     # Fix .profile: ganti auto-call menu jadi welcome (hanya 1 tempat yg panggil)

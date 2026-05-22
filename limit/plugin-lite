@@ -103,10 +103,23 @@ setup_bot() {
     SERVER_IP=$(curl -s ipv4.icanhazip.com)
     DOMAIN=$(cat /etc/xray/domain 2>/dev/null || echo "(Domain not set)")
 
-    export KEYAPI=8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE
-    export CHATID=1962241851
-    grep -q "botapi.conf" /etc/profile || echo "source /etc/botapi.conf" >> /etc/profile
-    source /etc/botapi.conf
+    # Persist token ke /etc/botapi.conf supaya systemd service apivpnlite
+    # (yang `source /etc/profile`) bisa baca via env. Versi lama menulis
+    # `source /etc/botapi.conf` ke /etc/profile TANPA membuat file dan
+    # TANPA guard → setiap login muncul:
+    #   -bash: /etc/botapi.conf: No such file or directory
+    KEYAPI=8681894724:AAEH_ZDs98e8rbs9_4_NXlYoDYdf2JMjEKE
+    CHATID=1962241851
+    cat > /etc/botapi.conf <<EOF
+export KEYAPI="$KEYAPI"
+export CHATID="$CHATID"
+EOF
+    chmod 600 /etc/botapi.conf
+    # Bersih-bersih referensi lama yang tidak guarded, lalu install guarded
+    # source (idempoten — aman walaupun file dihapus user di kemudian hari).
+    sed -i '\|botapi\.conf|d' /etc/profile
+    echo '[ -r /etc/botapi.conf ] && . /etc/botapi.conf' >> /etc/profile
+    . /etc/botapi.conf
 
     MESSAGE="---- *Plugin Installed* ----
  *Auth Key:* \`$AUTH_KEY\`
